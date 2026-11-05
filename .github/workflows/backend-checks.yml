@@ -38,6 +38,18 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund --prefix frontend
+      - name: Build React frontend
+        run: npm run build --prefix frontend
+      - name: Verify Django served React asset paths
+        run: |
+          grep -q '/static/frontend/assets/' frontend/dist/index.html
+          mkdir -p backend/ro_core/templates
+          cp frontend/dist/index.html backend/ro_core/templates/store_app.html
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
       - name: Validate Django
