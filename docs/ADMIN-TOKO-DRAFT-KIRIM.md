@@ -5,8 +5,8 @@
 - Satu pesanan terpisah per **toko × dapur × tanggal kirim × jadwal kirim**.
 - Admin Toko memilih toko yang menjadi tanggung jawabnya, dapur, tanggal kirim, jadwal kirim. Sistem memuat template SKU aktif dari middleware per dapur, pengguna **hanya mengisi Qty**.
 - **Simpan Draft**: Qty disimpan. Draft dapat dibuka lagi kapan pun sebelum Kirim dan nilainya dapat ditambah, dikurangi, diubah menjadi 0, atau dihapus.
-- **Kirim**: hanya baris **Qty ≥ 1** yang dipertahankan untuk konsolidasi; baris 0 atau Qty kurang dari 1 dikeluarkan. Setelah Kirim, Admin Toko **tidak boleh mengedit** Qty maupun mengirim dua kali.
-- Jika semua baris kosong/nol/di bawah 1, status menjadi **NO_ORDER**, bukan error dan tidak membuat permintaan produksi.
+- **Kirim**: hanya baris **Qty ≥ 1** yang dipertahankan untuk konsolidasi; Qty pada formulir wajib **integer nonnegatif** (0, 1, 2, ...), jadi nilai desimal ditolak sejak Simpan Draft. Setelah Kirim, Admin Toko **tidak boleh mengedit** Qty maupun mengirim dua kali.
+- Jika semua baris kosong/nol, status menjadi **NO_ORDER**, bukan error dan tidak membuat permintaan produksi.
 - Draft yang belum Kirim **tidak ikut** konsolidasi produksi.
 - Auto-submit pada **H-2 pukul 07.00 WIB** tetap aturan bisnis, tetapi worker otomatis **belum dibangun** pada milestone ini.
 - Saat template SKU berubah setelah Draft disimpan, Qty lama tidak hilang diam-diam. Produk yang sudah tersimpan dalam Draft tetap terlihat dengan flag `active_in_template=false` agar bisa dikoreksi/diubah menjadi nol.
@@ -38,7 +38,7 @@ Content-Type: application/json
   ]
 }
 ```
-Saat menyimpan Draft, item dengan Qty 0 tidak perlu dipertahankan sebagai baris database (dimuat ulang sebagai 0 dari template). Nilai 0.5 bisa berada dalam Draft, tetapi tidak ikut Kirim karena `qty < 1`. Input negatif, produk di luar template, duplikat ID, atau presisi Qty lebih dari 4 desimal ditolak. Request `items` merupakan **snapshot lengkap** nilai yang ingin disimpan; item yang tidak dikirim berarti Qty 0.
+Saat menyimpan Draft, item dengan Qty 0 tidak perlu dipertahankan sebagai baris database (dimuat ulang sebagai 0 dari template). Nilai desimal seperti `0.5` atau `1.5` **ditolak** oleh API, termasuk saat menyimpan Draft. Input negatif, produk di luar template, duplikat ID, serta angka yang bukan integer ditolak. Request `items` merupakan **snapshot lengkap** nilai yang ingin disimpan; item yang tidak dikirim berarti Qty 0.
 
 ### 3. Kirim pesanan
 ```http
@@ -79,3 +79,9 @@ Database migration baru tidak dibutuhkan pada milestone ini.
 
 ## Frontend yang sekarang tersedia
 Workspace React dapat dibuka di **http://localhost:900/toko/** setelah build Docker versi terbaru. Login memakai Session+CSRF Django; untuk QA gunakan superuser Django. Manajemen jadwal default bisa dijalankan sekali dengan `docker compose exec api python manage.py seed_order_schedules`. Tabel Qty menampilkan daftar template dapur yang sudah diimpor lewat Excel, mengisi Draft dan memanggil endpoint Kirim yang dijelaskan di atas. Panduan: [Workspace Admin Toko](./WORKSPACE-ADMIN-TOKO.md).
+
+## Perubahan aturan 2026-11-05 — Qty integer
+- Qty pemesanan toko **hanya integer**, termasuk untuk Draft. Qty 0 tetap sah dan hanya Qty ≥1 diproses saat Kirim.
+- API menolak nilai `1.5`, `0.5`, `1.0` dalam bentuk string, bilangan negatif, dan notasi ilmiah; frontend hanya mengizinkan digit.
+- Draft lama yang masih memiliki Qty desimal tidak otomatis dibulatkan dan harus diedit menjadi integer sebelum Kirim.
+- Kolom PostgreSQL tidak diubah karena persyaratan ini khusus data input toko; bahan baku Odoo bisa memakai satuan pecahan.
