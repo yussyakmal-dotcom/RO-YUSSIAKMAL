@@ -207,3 +207,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-045 (✅):** API produksi menormalkan nilai total integral dan menyertakan `uom` per produk serta `qty_uom` untuk total pesanan/rekap. Formatter React hanya menghapus pecahan nol, tanpa membulatkan nilai pecahan historis.
 - **I-046 (✅):** Tes backend/frontend mencakup Qty `1232.0000`, fallback pcs, UoM asli, UoM campuran, dan desimal historis yang tidak boleh dibulatkan.
 - Tidak mengubah skema PostgreSQL, BoM, sinkronisasi Odoo, atau satuan master.
+
+## Keamanan pembacaan Qty operasional dan Multi UoM — 2026-11-06
+- **D-057 (✅ penegasan pengguna):** Semua Qty pada layar operasional harus angka bulat dengan satuan yang jelas; `1.0000` tidak boleh dilihat sebagai angka Qty karena berisiko disalahartikan sebagai 10.000. `1 Pcs` harus tampak jelas sebagai `1 Pcs`.
+- **D-058 (✅ konsep Multi UoM dari pengguna):** Representasi fisik `1,5 Kg` ditampilkan sebagai `1 Kg` dan `500 gram` pada baris terpisah bila format multi-satuan Odoo dipakai. **Ini aturan bisnis untuk fitur multi-UoM lanjutan; bukan kemampuan StoreOrderLine saat ini**, yang masih menyimpan satu `Product.uom` dan satu baris per `order + product`. Tidak boleh membuat konversi atau baris tambahan secara diam-diam.
+- **I-047 (✅ pengamanan):** API antrean tidak lagi mengembalikan Qty pecahan historis sebagai angka siap-ditampilkan. Sebagai gantinya `qty_invalid=true`, `qty_total=null` dan UI menandai **Perlu koreksi Qty**. Rekap detail tetap menolak anomali dengan HTTP 409, tanpa pembulatan.
+- **I-048 (✅ pengamanan multi UoM):** Untuk total berisi SKU dengan UoM berbeda, API tidak memberi satu nilai Qty gabungan (`qty_total=null`) dan menyediakan `qty_by_uom` terpisah, UI menampilkan masing-masing Qty + UoM. Contoh `1 Kg · 500 gram`, bukan `501 beragam UoM`. Ini **bukan konversi antar UoM**.
+- **O-019 (❓ desain sistem berikutnya):** Untuk mendukung per produk multi-UoM/konversi dan baris sama SKU dengan unit berbeda diperlukan perluasan `StoreOrderLine`, tabel UoM/konversi yang sah, dan verifikasi dengan pemodelan Odoo sebelum implementasi.
