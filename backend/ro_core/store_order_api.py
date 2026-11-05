@@ -120,7 +120,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
     }
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def store_order_form(request):
     """GET by store+kitchen+date+schedule; POST replaces editable Draft Qty."""
