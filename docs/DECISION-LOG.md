@@ -89,3 +89,11 @@
 - **T-002 (🟡 implementasi disarankan):** Gunakan Django built-in auth/Groups, cache komponen BoM dalam JSONB, audit sederhana, dan outbox minimal; tidak membuat workflow engine generik ataupun ledger stok sendiri.
 - Dokumentasi terkait: [DDL Lean](./DDL.md) dan [Django Models](./DJANGO-MODELS.md).
 - Keputusan bisnis sebelumnya tetap berlaku; beberapa detail integrasi Odoo, DO, dan kebutuhan Paket masih terbuka.
+
+## Implementasi berikutnya — Bootstrap backend V1
+- **I-001 (✅ sudah dikerjakan):** Baseline project Django, PostgreSQL 16 via Docker Compose, Django ORM dan `0001_initial` migration telah ditambahkan di repository.
+- **I-002 (✅ validasi otomatis):** GitHub Actions lulus pemeriksaan Django, `makemigrations --check --dry-run`, `migrate` di PostgreSQL dan empat tes sederhana. PR #1 di-merge ke `main`.
+- **I-003 (batasan):** `compose.yaml` saat ini hanya untuk pengembangan lokal; belum ada API Odoo, form React, jadwal auto-submit, layanan Celery, atau deployment production.
+- **I-004 (prinsip):** Tetap satu monolith Django dan PostgreSQL; tambah worker/Redis hanya saat pekerjaan integrasi/jadwal diimplementasikan. Tidak membuat stok atau ERP kedua.
+
+Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migrations/0001_initial.py).
