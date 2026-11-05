@@ -101,8 +101,7 @@ class ProductionDemandTests(TestCase):
         self.assertEqual(data["basis"], "KIRIM_AND_PROSES_PRODUKSI")
         self.assertIsNone(data["production_date"])
         self.assertEqual(data["summary"], {
-            "stores_total": 3, "stores_sent": 2, "stores_in_production": 0, "stores_no_order": 0,
-            "stores_draft": 1, "stores_not_entered": 0,
+            "stores_total": 2, "stores_sent": 2, "stores_in_production": 0,
             "sku_count": 2, "qty_total": "82",
         })
         self.assertEqual(
@@ -119,28 +118,29 @@ class ProductionDemandTests(TestCase):
             {s["order_id"] for s in risoles["sources"]}, {a.pk, b.pk},
         )
         self.assertEqual(risoles["sources"][1]["auto_submitted"], True)
-        self.assertEqual(
-            {s["store_code"]: s["status"] for s in data["store_statuses"]}["T_MET"],
-            "DRAFT",
+        self.assertNotIn(
+            "T_MET", {s["store_code"] for s in data["store_statuses"]}
         )
         self.assertFalse(AuditLog.objects.exists())
         self.assertFalse(
             StoreOrder.objects.exclude(status__in=["DRAFT", "KIRIM"]).exists()
         )
 
-    def test_no_order_and_not_entered_are_not_implicitly_zero_orders(self):
+    def test_no_order_and_not_entered_are_invisible_in_production(self):
         self.create_order(self.store_a, "NO_ORDER")
         self.create_order(self.store_b, "KIRIM", [(self.risoles, 10)])
         self.client.force_login(self.production_user)
         data = self.request_recap().json()
-        self.assertEqual(data["summary"]["stores_no_order"], 1)
-        self.assertEqual(data["summary"]["stores_not_entered"], 1)
+        self.assertEqual(data["summary"]["stores_total"], 1)
         self.assertEqual(data["summary"]["stores_sent"], 1)
+        self.assertEqual(data["summary"]["stores_in_production"], 0)
         self.assertEqual(data["items"][0]["qty_total"], "10")
         self.assertEqual(
             {s["store_code"]: s["status"] for s in data["store_statuses"]},
-            {"T_BAN": "NO_ORDER", "T_KD": "KIRIM", "T_MET": "NOT_ENTERED"},
+            {"T_KD": "KIRIM"},
         )
+        self.assertNotIn("stores_draft", data["summary"])
+        self.assertNotIn("stores_no_order", data["summary"])
 
     def test_isolates_kitchen_date_schedule_and_inactive_template(self):
         assignment = ProductionAssignment.objects.get(product=self.risoles)
