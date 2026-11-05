@@ -1,5 +1,6 @@
 """Read-only connector and local master import regression tests."""
 from io import BytesIO
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, TestCase
