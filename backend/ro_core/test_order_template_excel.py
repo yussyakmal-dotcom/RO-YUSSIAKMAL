@@ -107,6 +107,11 @@ class KitchenTemplateTests(TestCase):
         self.assertFalse(ambiguous.is_valid)
         self.assertIn("tidak unik", str(ambiguous.errors))
 
+    def test_invalid_xlsx_is_validation_error_not_server_error(self):
+        fake = SimpleUploadedFile("broken.xlsx", b"not-a-zip-file")
+        with self.assertRaisesMessage(ValueError, "tidak valid"):
+            preview_xlsx(self.pastry, fake)
+
     def test_active_flag_does_not_change_master_product(self):
         preview = preview_xlsx(self.pastry, xlsx([
             ["SKU", "AKTIF"], ["12300", "Nonaktif"]
