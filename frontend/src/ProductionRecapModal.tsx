@@ -1,12 +1,8 @@
 import { useEffect, useRef } from "react";
+import { formatProductionQty, productionQtyLabel } from "./productionQty";
 import {
   type ProductionDemand, type ProductionInboxOrder,
 } from "./api";
-
-function qty(value: string): string {
-  try { return new Intl.NumberFormat("id-ID").format(BigInt(value)); }
-  catch { return value; }
-}
 
 type ProductionRecapModalProps = {
   order: ProductionInboxOrder;
@@ -91,7 +87,7 @@ export default function ProductionRecapModal({
             <>
               <div className="production-recap-summary">
                 <div><span>SKU unik</span><strong>{matchingReport.summary.sku_count}</strong></div>
-                <div><span>Total Qty</span><strong>{qty(matchingReport.summary.qty_total)}</strong></div>
+                <div><span>Total Qty</span><strong>{productionQtyLabel(matchingReport.summary.qty_total, matchingReport.summary.qty_uom)}</strong></div>
                 <div><span>Pesanan Kirim</span><strong>{matchingReport.summary.stores_sent}</strong></div>
                 <div><span>Proses Produksi</span><strong>{matchingReport.summary.stores_in_production}</strong></div>
               </div>
@@ -104,7 +100,7 @@ export default function ProductionRecapModal({
                         <strong>{item.name}</strong>
                         <small>{item.store_count} toko</small>
                       </span>
-                      <span className="production-recap-quantity">{qty(item.qty_total)} unit</span>
+                      <span className="production-recap-quantity">{productionQtyLabel(item.qty_total, item.uom)}</span>
                     </summary>
                     <div className="production-recap-sources">
                       {item.sources.map((source) => (
@@ -116,7 +112,7 @@ export default function ProductionRecapModal({
                               {source.status === "KIRIM" ? " Kirim" : " Proses Produksi"}
                             </small>
                           </div>
-                          <strong>{qty(source.qty)}</strong>
+                          <strong>{formatProductionQty(source.qty)} {item.uom}</strong>
                         </div>
                       ))}
                     </div>
