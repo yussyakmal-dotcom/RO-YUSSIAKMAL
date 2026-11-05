@@ -103,6 +103,7 @@ class ProductionDemandTests(TestCase):
         self.assertEqual(data["summary"], {
             "stores_total": 2, "stores_sent": 2, "stores_in_production": 0,
             "sku_count": 2, "qty_total": "82", "qty_uom": "pcs",
+            "qty_by_uom": [{"uom": "pcs", "qty": "82"}], "qty_invalid": False,
         })
         self.assertEqual(
             [(row["sku"], row["qty_total"]) for row in data["items"]],
@@ -247,6 +248,7 @@ class ProductionDemandTests(TestCase):
         self.assertEqual(mapped["T_BAN"]["schedule_code"], "PAGI")
         self.assertEqual(mapped["T_BAN"]["sku_count"], 1)
         self.assertEqual(Decimal(mapped["T_BAN"]["qty_total"]), Decimal("25"))
+        self.assertFalse(mapped["T_BAN"]["qty_invalid"])
         self.assertEqual(mapped["T_KD"]["delivery_date"], "2026-11-08")
         self.assertTrue(mapped["T_KD"]["auto_submitted"])
 
@@ -422,10 +424,16 @@ class ProductionDemandTests(TestCase):
         )
         self.client.force_login(self.production_user)
         result = self.client.get(reverse("production-inbox")).json()
-        self.assertEqual(result["items"][0]["qty_total"], "65")
+        self.assertIsNone(result["items"][0]["qty_total"])
+        self.assertEqual(result["items"][0]["qty_by_uom"], [
+            {"uom": "Lusin", "qty": "25"},
+            {"uom": "pcs", "qty": "40"},
+        ])
         self.assertIsNone(result["items"][0]["qty_uom"])
         recap = self.request_recap().json()
         self.assertIsNone(recap["summary"]["qty_uom"])
+        self.assertIsNone(recap["summary"]["qty_total"])
+        self.assertFalse(recap["summary"]["qty_invalid"])
         self.assertEqual(
             {row["sku"]: row["uom"] for row in recap["items"]},
             {"10005": "Lusin", "10006": "pcs"},
@@ -437,7 +445,32 @@ class ProductionDemandTests(TestCase):
         )
         self.client.force_login(self.production_user)
         data = self.client.get(reverse("production-inbox")).json()
-        self.assertEqual(data["items"][0]["qty_total"], "1.5000")
-        self.assertEqual(data["items"][0]["qty_uom"], "pcs")
+        self.assertIsNone(data["items"][0]["qty_total"])
+        self.assertTrue(data["items"][0]["qty_invalid"])
+        self.assertEqual(data["items"][0]["qty_by_uom"], [])
+        self.assertIsNone(data["items"][0]["qty_uom"])
         # The per-SKU recap rejects invalid historical final data, as before.
         self.assertEqual(self.request_recap().status_code, 409)
+
+    def test_mixed_units_never_show_a_raw_total_as_single_qty(self):
+        self.risoles.uom = "Kg"
+        self.risoles.save(update_fields=["uom"])
+        self.lemper.uom = "gram"
+        self.lemper.save(update_fields=["uom"])
+        self.create_order(self.store_a, "KIRIM", [
+            (self.risoles, 1), (self.lemper, 500),
+        ])
+        self.client.force_login(self.production_user)
+        inbox = self.client.get(reverse("production-inbox")).json()
+        record = inbox["items"][0]
+        self.assertIsNone(record["qty_total"])
+        self.assertIsNone(record["qty_uom"])
+        self.assertFalse(record["qty_invalid"])
+        self.assertEqual(record["qty_by_uom"], [
+            {"uom": "gram", "qty": "500"}, {"uom": "Kg", "qty": "1"},
+        ])
+        recap = self.request_recap().json()
+        self.assertIsNone(recap["summary"]["qty_total"])
+        self.assertEqual(recap["summary"]["qty_by_uom"], [
+            {"uom": "gram", "qty": "500"}, {"uom": "Kg", "qty": "1"},
+        ])

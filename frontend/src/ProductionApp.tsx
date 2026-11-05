@@ -199,7 +199,7 @@ function ProductionApp() {
                               <td>{order.delivery_date}</td>
                               <td>{order.kitchen_name}</td>
                               <td>{order.schedule_name}</td>
-                              <td><strong>{order.sku_count} SKU</strong><small>{productionQtyLabel(order.qty_total, order.qty_uom)}</small></td>
+                              <td><strong>{order.sku_count} SKU</strong><small className={order.qty_invalid ? "production-qty-warning" : undefined}>{productionQtyLabel(order.qty_total, order.qty_uom, order.qty_by_uom, order.qty_invalid)}</small></td>
                               <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
                               <td><button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button></td>
                             </tr>

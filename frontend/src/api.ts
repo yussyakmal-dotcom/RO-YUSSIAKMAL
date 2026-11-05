@@ -160,8 +160,10 @@ export interface ProductionDemand {
     stores_sent: number;
     stores_in_production: number;
     sku_count: number;
-    qty_total: string;
+    qty_total: string | null;
     qty_uom: string | null;
+    qty_by_uom: { uom: string; qty: string }[];
+    qty_invalid: boolean;
   };
   store_statuses: {
     store_code: string;
@@ -211,8 +213,10 @@ export interface RecentSentOrder {
   submitted_at: string | null;
   auto_submitted: boolean;
   sku_count: number;
-  qty_total: string;
+  qty_total: string | null;
   qty_uom: string | null;
+  qty_by_uom: { uom: string; qty: string }[];
+  qty_invalid: boolean;
 }
 
 export function loadRecentSentOrders(signal?: AbortSignal): Promise<{ limit: number; items: RecentSentOrder[] }> {
@@ -234,8 +238,10 @@ export interface ProductionInboxOrder {
   schedule_code: string;
   schedule_name: string;
   sku_count: number;
-  qty_total: string;
+  qty_total: string | null;
   qty_uom: string | null;
+  qty_by_uom: { uom: string; qty: string }[];
+  qty_invalid: boolean;
   auto_submitted: boolean;
 }
 export interface ProductionInbox {

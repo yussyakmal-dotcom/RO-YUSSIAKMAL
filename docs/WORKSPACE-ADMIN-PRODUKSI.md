@@ -83,3 +83,10 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
   ```bash
   docker compose exec api python manage.py shell -c "from ro_core.models import Product; print(list(Product.objects.filter(sku='10005').values('sku','name','uom')))"
   ```
+
+## Pengamanan wajib Qty tanpa desimal dan multi-satuan
+- **Tampilan operasional tidak pernah menampilkan Qty desimal.** Bilangan bulat tersimpan `1.0000` tampil `1`, `1232.0000` tampil `1.232`. Data lama dengan pecahan sungguhan **tidak dibulatkan**; muncul peringatan **Perlu koreksi Qty** dalam daftar produksi. Rekap yang memuat data bermasalah akan menolak dengan HTTP 409 sampai datanya diperbaiki.
+- **Jangan menjumlahkan satuan berlainan seolah sejenis.** Total Qty `1 Kg` ditambah `500 gram` **bukan** `501 unit`. Daftar dan ringkasan rekap menampilkan subtotal **per UoM** (`1 Kg · 500 gram`) tanpa konversi terselubung.
+- Produk yang menggunakan UoM sama tetap dapat dijumlahkan; setiap baris SKU memakai UoM asli dari `Product.uom` bila ada, fallback `pcs` bila kosong.
+- UoM per baris pesanan belum tersedia: `StoreOrderLine` sekarang punya satu Qty per SKU dan unitnya mengikuti master Produk. Multi-UoM untuk **satu SKU** dengan baris `1 Kg` dan `500 gram` memerlukan keputusan dan perubahan skema lanjutan. Ini **belum** diimplementasikan. Jangan menyimpulkan adanya konversi otomatis.
+- Perubahan ini hanya pemeriksaan dan penyajian API/React, tanpa migrasi atau mutasi data/Odoo. `qty_total=null` menandakan total tidak aman untuk dinyatakan sebagai satu angka; baca `qty_by_uom` dan `qty_invalid`.
