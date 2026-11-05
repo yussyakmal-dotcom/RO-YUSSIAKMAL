@@ -142,3 +142,11 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-017 (implementasi API):** Endpoint Django untuk membaca Draft/daftar SKU, menyimpan ulang Draft, dan Kirim dengan transaksi atomik/row lock. Jika tidak ada baris Qty ≥1, status `NO_ORDER` sesuai keputusan sebelumnya.
 - **I-018 (batas milestone):** Frontend React dan penjadwal auto-submit H-2 07.00 WIB belum diimplementasikan; API menangani Kirim manual terlebih dahulu.
 - Referensi: [Aturan API Draft/Kirim](./ADMIN-TOKO-DRAFT-KIRIM.md).
+
+## Implementasi frontend Admin Toko — 2026-11-05
+- **I-019 (implementasi):** React + TypeScript + Vite dengan tampilan enterprise light terinspirasi SAP Fiori Horizon untuk Workspace Admin Toko.
+- **I-020 (implementasi):** Django melayani frontend di `/toko/` pada **port host 900 yang sama**; Django Admin tetap di `/admin/`. Docker multi-stage membangun asset React dan menyatukannya ke image backend, tanpa port tambahan.
+- **I-021 (implementasi):** Halaman login sesi Django+CSRF, pengambilan toko berdasarkan akses user, pilihan dapur/template, tanggal kirim, jadwal, tabel input Qty, cari/filter, simpan Draft, buka/edit lagi, dan Kirim Qty ≥1.
+- **I-022 (penyederhanaan):** Tidak menambah microservice atau database. Ada management command idempotent `seed_order_schedules` untuk tiga jadwal standar bila belum ada.
+- **I-023 (belum):** Auto-submit H-2 07.00 WIB, React frontend workspace lain, reverse proxy/HTTPS production, dan transaksi write ke Odoo tetap pekerjaan berikutnya.
+- Panduan: [Workspace Admin Toko](./WORKSPACE-ADMIN-TOKO.md).
