@@ -85,6 +85,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
             if order is not None else []
         )
     }
+    active_ids = {entry.product_id for entry in active_assignments}
     items = [
         {
             "product_id": entry.product_id,
@@ -99,7 +100,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
     # If the template changes after a Draft was saved, do not silently lose
     # its previously entered positive quantities. Show them for review.
     for product_id, line in existing_lines.items():
-        if product_id not in {a.product_id for a in active_assignments}:
+        if product_id not in active_ids:
             items.append({
                 "product_id": product_id,
                 "sku": line.product.sku,
