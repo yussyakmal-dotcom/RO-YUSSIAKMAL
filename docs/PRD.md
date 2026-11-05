@@ -45,13 +45,13 @@ Jumlah: **19 warehouse**, yaitu 1 Central, 10 dapur produksi, 1 Packing, 7 toko.
 | Domain | System of record |
 |---|---|
 | SKU, kategori, BoM, komponen, warehouse, location, stok aktual | **Odoo → Middleware** |
-| Mapping SKU → dapur aktif | **Middleware**, initial import sekali berdasarkan Product Category Odoo (kategori dikenali → dapur; PAKET → Packing), lalu setiap perubahan dikelola di middleware dan tidak dioverwrite oleh sinkronisasi rutin |
+| Mapping SKU → dapur aktif | **Middleware**, mapping dapur kerja yang dipakai untuk perencanaan dikelola middleware; sumber *initial assignment* belum diputuskan. Pada saat membuat MO, lokasi/dapur produksi ditentukan oleh **Manufacturing Operation Type Odoo** (picking_type_id), bukan Product Category. Sinkronisasi master tidak boleh menimpa keputusan operator |
 | Kapasitas per SKU per jadwal; jadwal produksi/kirim | Middleware |
 | Parameter minimum stok Premix/WIP per warehouse | Middleware |
 | Permintaan toko, revisi, konsolidasi, alokasi, identitas middleware | Middleware |
 | MO & transfer aktual/status stok resmi | Odoo |
 
-SKU dapat dipindah dapur sesuai SOP; hanya satu dapur aktif untuk SKU pada satu waktu; middleware tidak mengatur bentrok proses fisik. Simpan dapur snapshot saat rencana/MO dibuat. Odoo sudah dikonfigurasi agar BoM tidak memicu BoM/MO lain.
+SKU umumnya memiliki satu dapur aktif untuk kebutuhan perencanaan, tetapi **MO yang dibuat harus menggunakan Operation Type manufaktur milik dapur tujuan**. Operation Type pada MO adalah penentu operasional di Odoo; kategori produk hanya grouping. SKU dapat dipindah dapur sesuai SOP; middleware tidak mengatur bentrok proses fisik. Simpan dapur snapshot saat rencana/MO dibuat. Odoo sudah dikonfigurasi agar BoM tidak memicu BoM/MO lain.
 
 ## 4. Alur permintaan toko
 - Toko memilih **tanggal pesan, tanggal kirim, jadwal kirim**. Sistem memetakan jadwal kirim ke jadwal produksi.
@@ -96,6 +96,7 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Tidak mengonfirmasi, mengeksekusi WO, atau memvalidasi transfer di V1; aktivitas fisik mengikuti SOP di Odoo.
 - Odoo merupakan sumber status transaksi dan stok resmi. Simpan `odoo_model`, `odoo_record_id`, status sinkronisasi, request id, error, retry.
 - Gunakan integrasi JSON-2 sesuai dukungan paket/izin Odoo Online. Credential harus aman. Operasi multi-dokumen tidak atomik lintas panggilan: cegah duplikasi dan tangani partial success.
+- Saat membuat MO Draft, gunakan `mrp.production.picking_type_id` yang sesuai dapur produksi/packing terpilih. ID dan hubungan Operation Type ↔ warehouse harus dibaca dan diverifikasi dari Odoo; **jangan** ditentukan lewat Product Category. Detail konfigurasi mapping menunggu hasil pemeriksaan tenant.
 - Field `Source Document` dihasilkan middleware. **Format** `KODE-YYMMDD-COUNTER`; kode tanpa `/Stock` atau `/Packing`, waktu pembuatan dokumen **WIB**, counter **per warehouse per hari** mulai `10001`. Identitas referensi middleware tidak menggantikan nomor native Odoo.
 
 ## 10. UX, arsitektur dan kebutuhan nonfungsional
@@ -124,6 +125,7 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Urutan referensi source document untuk transfer dua warehouse: kode warehouse asal atau tujuan (usulan asal).
 - Detail replenishment Premix/WIP: titik trigger, approval, target qty di atas minimum.
 - Batas akses pengguna per toko, penanganan pengembalian/koreksi, sinkronisasi stok, snapshot BoM, kuantitas satuan/UoM dan precision.
+- Mapping awal SKU→dapur: metode input/operator atau referensi MO historis belum dipilih; yang pasti routing tiap MO ditentukan Operation Type di Odoo.
 - Infrastruktur hosting dan kebijakan RPO/RTO backup.
 
 > Dokumen ini baseline requirements, bukan bukti validasi langsung API/model Odoo pada tenant produksi.
