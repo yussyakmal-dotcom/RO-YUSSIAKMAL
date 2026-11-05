@@ -102,7 +102,7 @@ class ProductionDemandTests(TestCase):
         self.assertIsNone(data["production_date"])
         self.assertEqual(data["summary"], {
             "stores_total": 2, "stores_sent": 2, "stores_in_production": 0,
-            "sku_count": 2, "qty_total": "82",
+            "sku_count": 2, "qty_total": "82", "qty_uom": "pcs",
         })
         self.assertEqual(
             [(row["sku"], row["qty_total"]) for row in data["items"]],
@@ -308,7 +308,8 @@ class ProductionDemandTests(TestCase):
             [x["delivery_date"] for x in data["items"]],
             ["2026-11-07", "2026-11-09"],
         )
-        self.assertEqual([x["qty_total"] for x in data["items"]], ["25.0000", "40.0000"])
+        self.assertEqual([x["qty_total"] for x in data["items"]], ["25", "40"])
+        self.assertEqual([x["qty_uom"] for x in data["items"]], ["pcs", "pcs"])
         self.assertNotIn("DRAFT", str(data))
         self.assertNotIn("NO_ORDER", str(data))
         self.assertEqual(AuditLog.objects.count(), 0)
@@ -379,3 +380,64 @@ class ProductionDemandTests(TestCase):
             [("KIRIM", "25"), ("PROSES_PRODUKSI", "40")],
         )
         self.assertEqual(StoreOrder.objects.filter(status="DRAFT").count(), 1)
+
+    def test_recap_uses_synced_product_uom_and_integer_quantities(self):
+        self.risoles.uom = "Lusin"
+        self.risoles.save(update_fields=["uom"])
+        self.create_order(
+            self.store_a, "KIRIM",
+            [(self.risoles, Decimal("120.0000"))],
+        )
+        self.create_order(
+            self.store_b, "KIRIM",
+            [(self.risoles, Decimal("30.0000"))],
+        )
+        self.client.force_login(self.production_user)
+
+        recap = self.request_recap()
+        self.assertEqual(recap.status_code, 200, recap.content)
+        data = recap.json()
+        self.assertEqual(data["summary"]["qty_total"], "150")
+        self.assertEqual(data["summary"]["qty_uom"], "Lusin")
+        self.assertEqual(data["items"][0]["uom"], "Lusin")
+        self.assertEqual(data["items"][0]["qty_total"], "150")
+        self.assertEqual(
+            [line["qty"] for line in data["items"][0]["sources"]],
+            ["120", "30"],
+        )
+
+        inbox = self.client.get(reverse("production-inbox")).json()
+        self.assertEqual([row["qty_total"] for row in inbox["items"]], ["120", "30"])
+        self.assertEqual([row["qty_uom"] for row in inbox["items"]], ["Lusin", "Lusin"])
+
+    def test_mixed_uom_order_uses_no_assumed_single_unit(self):
+        self.risoles.uom = "Lusin"
+        self.risoles.save(update_fields=["uom"])
+        self.lemper.uom = ""  # missing in Odoo master -> fallback pcs
+        self.lemper.save(update_fields=["uom"])
+        self.create_order(
+            self.store_a, "KIRIM",
+            [(self.risoles, Decimal("25.0000")),
+             (self.lemper, Decimal("40.0000"))],
+        )
+        self.client.force_login(self.production_user)
+        result = self.client.get(reverse("production-inbox")).json()
+        self.assertEqual(result["items"][0]["qty_total"], "65")
+        self.assertIsNone(result["items"][0]["qty_uom"])
+        recap = self.request_recap().json()
+        self.assertIsNone(recap["summary"]["qty_uom"])
+        self.assertEqual(
+            {row["sku"]: row["uom"] for row in recap["items"]},
+            {"10005": "Lusin", "10006": "pcs"},
+        )
+
+    def test_historical_fractional_inbox_is_not_rounded_silently(self):
+        self.create_order(
+            self.store_a, "KIRIM", [(self.risoles, Decimal("1.5000"))]
+        )
+        self.client.force_login(self.production_user)
+        data = self.client.get(reverse("production-inbox")).json()
+        self.assertEqual(data["items"][0]["qty_total"], "1.5000")
+        self.assertEqual(data["items"][0]["qty_uom"], "pcs")
+        # The per-SKU recap rejects invalid historical final data, as before.
+        self.assertEqual(self.request_recap().status_code, 409)
