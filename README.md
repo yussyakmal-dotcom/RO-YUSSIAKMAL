@@ -36,6 +36,17 @@ docker compose exec api python manage.py odoo_sync_master --apply  # middleware 
 
 Read [connector setup and limitations](docs/ODOO-CONNECTOR.md) before applying. Mapping SKU-to-kitchen remains middleware-owned and is never overwritten by routine sync. Live Odoo integration is not configured until credentials are supplied locally.
 
+## Initial SKU → dapur mapping dari Product Category
+
+Setelah master Odoo berhasil diimpor, cek pemetaan kategori ke dapur:
+
+```bash
+docker compose exec api python manage.py init_kitchen_mapping          # preview, tidak menulis
+docker compose exec api python manage.py init_kitchen_mapping --apply  # mapping kosong saja
+```
+
+Periksa terlebih dahulu kategori yang belum cocok dalam preview. Mapping yang sudah ada atau diubah manual **tidak ditimpa**, termasuk saat sync Odoo berikutnya. Kategori Paket diarahkan ke Packing (PCK). Tidak diperlukan migration baru. Lihat [panduan mapping awal](docs/ODOO-CONNECTOR.md#initial-mapping-sku--dapur-dari-product-category).
+
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 
 Jangan commit .env, credential Odoo, file backup. Hindari `docker compose down -v` jika data PostgreSQL ingin dipertahankan.
