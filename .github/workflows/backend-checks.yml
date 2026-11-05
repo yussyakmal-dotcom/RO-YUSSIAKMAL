@@ -52,6 +52,8 @@ jobs:
           cp frontend/dist/index.html backend/ro_core/templates/store_app.html
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+      - name: Smoke test full Docker image build
+        run: docker build -f backend/Dockerfile -t ro-middleware-ci .
       - name: Validate Django
         run: python backend/manage.py check
       - name: Validate committed migrations
