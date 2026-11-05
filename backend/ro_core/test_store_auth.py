@@ -53,6 +53,25 @@ class StoreSessionAuthTests(TestCase):
         )
         self.assertEqual(self.client.get(reverse("store-session-me")).status_code, 401)
 
+    def test_react_workspace_served_from_existing_django_port(self):
+        # CI builds frontend/dist/index.html before backend tests.
+        response = self.client.get(reverse("store-workspace"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Admin Toko")
+        self.assertContains(response, "/static/frontend/assets/")
+
+    def test_default_schedules_seed_does_not_override_existing(self):
+        from django.core.management import call_command
+
+        Schedule.objects.filter(code="SUBUH").update(name="Subuh Custom")
+        call_command("seed_order_schedules", verbosity=0)
+        call_command("seed_order_schedules", verbosity=0)
+        self.assertEqual(Schedule.objects.get(code="SUBUH").name, "Subuh Custom")
+        self.assertEqual(
+            set(Schedule.objects.values_list("code", flat=True)),
+            {"SUBUH", "PAGI", "SIANG"},
+        )
+
     def test_bad_password_and_disallowed_group(self):
         self.client.get(reverse("store-session-csrf"))
         token = self.client.cookies["csrftoken"].value
