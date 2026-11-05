@@ -45,7 +45,7 @@ Jumlah: **19 warehouse**, yaitu 1 Central, 10 dapur produksi, 1 Packing, 7 toko.
 | Domain | System of record |
 |---|---|
 | SKU, kategori, BoM, komponen, warehouse, location, stok aktual | **Odoo → Middleware** |
-| Mapping SKU → dapur aktif | **Middleware**, initial import satu kali dari mapping Odoo; berikutnya tidak dioverwrite oleh sync |
+| Mapping SKU → dapur aktif | **Middleware**, initial import sekali berdasarkan Product Category Odoo (kategori dikenali → dapur; PAKET → Packing), lalu setiap perubahan dikelola di middleware dan tidak dioverwrite oleh sinkronisasi rutin |
 | Kapasitas per SKU per jadwal; jadwal produksi/kirim | Middleware |
 | Parameter minimum stok Premix/WIP per warehouse | Middleware |
 | Permintaan toko, revisi, konsolidasi, alokasi, identitas middleware | Middleware |

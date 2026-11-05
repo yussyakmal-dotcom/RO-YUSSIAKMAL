@@ -68,8 +68,47 @@ Import boleh diulang: data master dicocokkan dengan **Odoo ID**. Tidak ada trans
 - Saat implementasi masih tahap development, **port host tetap 900**. Tidak ada endpoint web untuk menjalankan sync; perintah hanya dijalankan oleh operator di shell server.
 - Gunakan akses API key dengan prinsip hak minimum dan rotasi; setiap penggunaan API key dicatat oleh Odoo sesuai izin akun.
 
+## Initial mapping SKU → dapur dari Product Category
+
+Pengguna memastikan bahwa **Product Category** pada daftar Products Odoo adalah penentu dapur awal. Screenshot menampilkan kategori `Legit`, `Paket`, dan `Pastry`. Kategori tersebut sudah dibaca menjadi field `Product.category` middleware melalui `categ_id`. Tidak perlu memanggil API tambahan atau mengubah skema database.
+
+Perintah aman untuk dijalankan pada server yang sudah mengimpor master:
+
+```bash
+git pull origin main
+docker compose exec api python manage.py init_kitchen_mapping
+```
+
+Preview menunjukkan jumlah SKU kandidat, kategori yang dikenali dan belum cocok, mapping lama, serta warehouse yang belum tersedia. Periksa hasilnya dahulu; **tidak ada perubahan** pada mode preview.
+
+Kandidat mapping berdasarkan **nama kategori persis** (perbedaan kapital/spasi diabaikan), tanpa tebakan dari nama produk, BoM, kode SKU, atau nama kategori bertingkat:
+
+| Category Odoo (nama tepat) | Warehouse middleware |
+|---|---|
+| Asin | ASN |
+| Cake Slice | CKS |
+| Gorengan | GRG |
+| Jajan Pasar | JP |
+| Pastry | PST |
+| Roti | ROTI |
+| Sultan & Lemper | SUL |
+| Tart | TART |
+| Premik | PREMI |
+| Legit | LEGIT |
+| Paket | PCK (Packing) |
+
+**Catatan:** kategori selain Legit, Paket, dan Pastry pada tabel di atas adalah **kandidat konvensi nama berdasarkan daftar dapur**, bukan kategori yang sudah terbukti ada di tenant Odoo. Preview memberi verifikasi realnya. Nama kategori seperti `Bahan Baku`, `WIP`, `Premix`, atau nested path `Raw Materials / Pastry` tidak dipetakan otomatis. Ini menghindari keliru menempatkan bahan baku sebagai produk jadi.
+
+Jika preview sudah sesuai:
+
+```bash
+docker compose exec api python manage.py init_kitchen_mapping --apply
+```
+
+`--apply` hanya membuat record `ProductionAssignment` yang **belum ada** di PostgreSQL lokal. Tidak ada perubahan di Odoo, tidak ada perubahan mapping SKU yang sudah dimodifikasi manual. Menjalankannya kembali tidak menghasilkan duplikasi. Setelahnya, ubah pemindahan dapur melalui pengelolaan middleware/Django Admin (sementara), bukan dengan sinkronisasi rutin.
+
 ## Belum diselesaikan
-- Field sumber initial assignment SKU→dapur dari tenant Odoo.
+- Variasi nama kategori produksi lain di tenant yang tidak cocok persis, serta kategori WIP/Premix; preview harus direview.
 - Nama field/customisasi BoM atau product category tenant (periksa /doc).
 - Stok usable vs reserved, UoM conversion, dan integrasi Draft MO/Transfer.
 - Produk Odoo archived tidak dihapus/dinonaktifkan secara otomatis oleh sync ini.
