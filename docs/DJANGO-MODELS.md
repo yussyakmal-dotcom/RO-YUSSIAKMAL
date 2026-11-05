@@ -2,6 +2,8 @@
 **Status:** baseline implementasi untuk tim engineering. **Tidak memakai custom user model.**  
 **Sumber:** [PRD](./PRD.md), [DDL](./DDL.md), [Decision Log](./DECISION-LOG.md).
 
+> Implementasi awal ORM tersedia di [`backend/ro_core/models.py`](../backend/ro_core/models.py). Modul belum diuji dengan project Django dan migration; finalisasi berikutnya adalah scaffold dan `makemigrations`.
+
 ## Paket dan struktur aplikasi
 ```text
 backend/
