@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md)
 
 ## Jalankan pengembangan lokal
 
@@ -23,6 +23,19 @@ docker compose exec api python manage.py test ro_core
 docker compose logs -f api
 ```
 
-Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki implementasi seluruh workflow, integrasi Odoo atau deployment production.
+## Odoo 19 master connector (read-only)
+
+Set `ODOO_BASE_URL`, optional `ODOO_DATABASE`, and `ODOO_API_KEY` inside your untracked `.env` file, then recreate the API container so it loads the new environment. **Never commit API keys.**
+
+```bash
+docker compose up -d --build --force-recreate api
+docker compose exec api python manage.py odoo_probe
+docker compose exec api python manage.py odoo_sync_master          # preview, no writes
+docker compose exec api python manage.py odoo_sync_master --apply  # middleware database only
+```
+
+Read [connector setup and limitations](docs/ODOO-CONNECTOR.md) before applying. Mapping SKU-to-kitchen remains middleware-owned and is never overwritten by routine sync. Live Odoo integration is not configured until credentials are supplied locally.
+
+Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 
 Jangan commit .env, credential Odoo, file backup. Hindari `docker compose down -v` jika data PostgreSQL ingin dipertahankan.
