@@ -37,10 +37,10 @@ Login dilakukan di `/toko/`, tidak harus melalui Django Admin. Autentikasi mengg
 1. Pilih **Toko** yang berhak diakses.
 2. Pilih **Dapur / Template** (akan menampilkan jumlah SKU aktif dari template manual; mis. Dapur Jajan Pasar).
 3. Pilih **Tanggal Pengiriman** (default tampilan H+2 berdasarkan Asia/Jakarta, bebas diubah) dan **Jadwal Kirim**.
-4. Tabel SKU/ID dan Nama Produk otomatis muncul dari template. Pengguna cukup mengisi **Qty**, gunakan Tab atau Enter untuk pindah.
+4. Tabel SKU/ID dan Nama Produk otomatis muncul dari template. Pengguna cukup mengisi **Qty bilangan bulat** (0, 1, 2, ...), tanpa desimal; gunakan Tab atau Enter untuk pindah.
 5. Tombol **Simpan Draft** menyimpan Qty. Formulir bisa ditutup/dibuka ulang dan Qty lama tetap ada/editable.
 6. Tombol **Kirim Pesanan** meminta konfirmasi, menyimpan perubahan terbaru bila belum disimpan, dan mengirim hanya baris Qty **≥ 1**. Status berubah menjadi `KIRIM` dan form terkunci.
-7. Jika semuanya 0 atau kurang dari 1, kirim menjadi **NO_ORDER**, bukan error.
+7. Jika semuanya 0, kirim menjadi **NO_ORDER**, bukan error. Qty pecahan ditolak saat input/simpan Draft.
 
 Ada pencarian SKU/nama, filter `Hanya Qty ≥ 1`, ringkasan jumlah SKU dan Qty, serta peringatan saat berpindah pilihan dengan Draft yang belum tersimpan. SKU nonaktif dari template tidak muncul pada order baru; jika sudah ada dalam Draft sebelum dinonaktifkan, tetap muncul untuk diperiksa dan dikoreksi tanpa kehilangan data.
 
@@ -67,3 +67,9 @@ Hanya koneksi ke middleware; **tidak ada transaksi write ke Odoo** pada workspac
 - Django runserver + staticfiles saat ini **hanya untuk development lokal**; sebelum akses publik/production perlu reverse proxy, HTTPS, static server dan service WSGI yang sesuai.
 - Daftar jadwal dibuat sekali dengan `seed_order_schedules` jika belum ada; perintah tidak mengganti konfigurasi jadwal yang telah dimodifikasi.
 - Frontend belum menyimpan data secara offline. Jika koneksi terputus sebelum Draft disimpan, input yang belum disimpan bisa hilang.
+
+## Validasi Qty integer
+- Field input Qty menggunakan keyboard angka dan hanya menerima digit `0-9`. Minus, koma, titik desimal, dan notasi `e` tidak diterima.
+- API tetap memvalidasi agar klien lain tidak bisa mengirim Qty pecahan. Contoh `1` diterima, `1.5` ditolak dengan HTTP 400.
+- Qty desimal dari Draft versi lama ditampilkan untuk dikoreksi manual sebelum Kirim; middleware **tidak membulatkan otomatis**.
+- Nilai Qty disimpan pada skema lama Decimal(18,4); perubahan ini **tidak membutuhkan migration DB** dan tidak memengaruhi perhitungan bahan baku.
