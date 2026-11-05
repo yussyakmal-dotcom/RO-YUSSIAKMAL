@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ProductionRecapModal from "./ProductionRecapModal";
 import { LoginPage } from "./App";
 import {
   initializeSession, loadProductionDemand, loadProductionInbox, logout,
@@ -25,6 +26,7 @@ function ProductionApp() {
   const [report, setReport] = useState<ProductionDemand | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
+  const recapOpenerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +87,20 @@ function ProductionApp() {
     });
     return () => controller.abort();
   }, [session, selected, refresh]);
+
+  const openRecap = (order: ProductionInboxOrder, opener: HTMLButtonElement) => {
+    recapOpenerRef.current = opener;
+    setSelected(order);
+  };
+
+  const closeRecap = () => {
+    setSelected(null);
+    // Preserve the exact row and list position; don't navigate or change filters.
+    const opener = recapOpenerRef.current;
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+    });
+  };
 
   const chooseFilter = (value: ProductionInboxFilter) => {
     if (value === filter) return;
@@ -189,7 +205,7 @@ function ProductionApp() {
                               <td>{order.schedule_name}</td>
                               <td><strong>{order.sku_count} SKU</strong><small>{units(order.qty_total)} unit</small></td>
                               <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
-                              <td><button type="button" className="production-open-rekap" onClick={() => setSelected(order)}>Lihat rincian</button></td>
+                              <td><button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button></td>
                             </tr>
                           ))}
                           {!inbox.items.length && <tr><td colSpan={7} className="production-inbox-empty">Belum ada pesanan untuk status ini.</td></tr>}
@@ -207,37 +223,13 @@ function ProductionApp() {
                 )}
               </section>
               {selected && (
-                <section className="card production-scope" aria-live="polite">
-                  <div className="production-scope-header">
-                    <div>
-                      <div className="section-heading"><span className="step-number">02</span> Rincian Konsolidasi</div>
-                      <p className="production-scope-meta">{selected.kitchen_name} · {selected.delivery_date} · {selected.schedule_name}</p>
-                      <p className="production-scope-meta">Total per SKU dari pesanan Kirim dan Proses Produksi pada lingkup yang sama.</p>
-                    </div>
-                    <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Tutup</button>
-                  </div>
-                  {reportLoading && <div className="table-placeholder"><span className="spinner" /> Menghitung kebutuhan SKU…</div>}
-                  {reportError && <div className="message error" role="alert">{reportError}</div>}
-                  {report && !reportLoading && (
-                    <>
-                      <p className="production-scope-summary">
-                        {report.summary.sku_count} SKU · {units(report.summary.qty_total)} unit ·
-                        {" "}{report.summary.stores_sent} pesanan Kirim · {report.summary.stores_in_production} Proses Produksi
-                      </p>
-                      <div className="production-scope-details">
-                        {report.items.map((item) => (
-                          <details key={item.product_id}>
-                            <summary>{item.sku} — {item.name}: {units(item.qty_total)} unit ({item.store_count} toko)</summary>
-                            {item.sources.map((source) => (
-                              <p key={source.order_id}>{source.store_name} · Order #{source.order_id} · {units(source.qty)} unit · {source.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</p>
-                            ))}
-                          </details>
-                        ))}
-                        {!report.items.length && <p>Belum ada baris Qty final dalam lingkup ini.</p>}
-                      </div>
-                    </>
-                  )}
-                </section>
+                <ProductionRecapModal
+                  order={selected}
+                  report={report}
+                  loading={reportLoading}
+                  error={reportError}
+                  onClose={closeRecap}
+                />
               )}
               <p className="production-note">Status Proses Produksi hanya akan diberikan ketika langkah konsolidasi rencana benar-benar disimpan. Membuka rincian tidak mengubah status atau membuat MO.</p>
             </>
