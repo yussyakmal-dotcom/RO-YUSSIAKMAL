@@ -238,8 +238,10 @@ export interface ProductionInboxOrder {
   schedule_code: string;
   schedule_name: string;
   sku_count: number;
-  qty_total: string;
+  qty_total: string | null;
   qty_uom: string | null;
+  qty_by_uom: { uom: string; qty: string }[];
+  qty_invalid: boolean;
   auto_submitted: boolean;
 }
 export interface ProductionInbox {
