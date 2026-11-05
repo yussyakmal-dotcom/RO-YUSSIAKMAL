@@ -84,3 +84,43 @@ class AutoSubmitTests(TestCase):
         self.assertEqual(auto_submit_drafts(apply=True, now=self.now)["sent"], 1)
         self.assertEqual(auto_submit_drafts(apply=True, now=self.now)["sent"], 0)
         self.assertEqual(AuditLog.objects.filter(action="AUTO_KIRIM").count(), 1)
+
+    def test_cutoff_uses_jakarta_even_when_clock_utc(self):
+        from datetime import timezone as dt_timezone
+        utc_time = datetime(2026, 11, 5, 0, 0, tzinfo=dt_timezone.utc)
+        order = self.make_order(qty=1)
+        result = auto_submit_drafts(apply=True, now=utc_time)
+        self.assertEqual(result["date_wib"], "2026-11-05")
+        self.assertEqual(result["time_wib"], "07:00:00")
+        self.assertEqual(result["delivery_date"], "2026-11-07")
+        self.assertEqual(StoreOrder.objects.get(pk=order.pk).status, "KIRIM")
+
+    def test_command_preview_default_and_apply(self):
+        from io import StringIO
+        from unittest.mock import patch
+        from django.core.management import call_command
+
+        self.make_order(qty=3)
+        preview = StringIO()
+        with patch("ro_core.auto_submit.timezone.now", return_value=self.now):
+            call_command("auto_submit_store_orders", stdout=preview)
+        self.assertIn('"mode": "PREVIEW"', preview.getvalue())
+        self.assertEqual(StoreOrder.objects.filter(status="DRAFT").count(), 1)
+        applied = StringIO()
+        with patch("ro_core.auto_submit.timezone.now", return_value=self.now):
+            call_command("auto_submit_store_orders", "--apply", stdout=applied)
+        self.assertIn('"mode": "APPLY"', applied.getvalue())
+        self.assertEqual(StoreOrder.objects.filter(status="KIRIM").count(), 1)
+
+    def test_command_refuses_early_apply(self):
+        from io import StringIO
+        from unittest.mock import patch
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        self.make_order(qty=1)
+        early = self.now - timedelta(minutes=1)
+        with patch("ro_core.auto_submit.timezone.now", return_value=early):
+            with self.assertRaisesMessage(CommandError, "07:00 WIB"):
+                call_command("auto_submit_store_orders", "--apply", stdout=StringIO())
+        self.assertEqual(StoreOrder.objects.filter(status="DRAFT").count(), 1)
