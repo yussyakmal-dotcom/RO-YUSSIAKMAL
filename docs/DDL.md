@@ -206,3 +206,14 @@ CREATE INDEX idx_odoo_document_state ON odoo_document (state);
 - `ProductionAssignment` yang ada adalah *default planning assignment* internal saja; asal pengisian awal belum diputuskan.
 - **Belum ada migrasi baru:** inspeksi Operation Type Odoo dilakukan read-only. Jika model konfigurasi mapping `Warehouse → picking_type_id` nantinya disetujui, tambahkan field atau tabel kecil melalui Django migration; jangan menebak dari kategori.
 - Saat integrasi create MO dibuat, tipe operasi yang cocok harus eksplisit, bukan mengandalkan default Odoo yang bisa salah warehouse.
+
+## Perubahan V1 — Template pemesanan manual
+Template satu dapur diwakili oleh daftar `ProductionAssignment`. Migration Django `0002_order_template_flags.py` menambah:
+```sql
+ALTER TABLE ro_core_productionassignment
+  ADD COLUMN is_active boolean NOT NULL DEFAULT TRUE,
+  ADD COLUMN sort_order integer NOT NULL DEFAULT 0;
+```
+Perubahan di atas adalah **referensi DDL**, dijalankan oleh **Django migrations**, bukan SQL manual. `ProductionAssignment.product_id` tetap unik untuk mencegah SKU ditugaskan ke lebih dari satu dapur.
+
+Aturan: `is_active=false` berarti SKU tidak ditampilkan di template pemesanan baru; **jangan** mengubah `Product.active` yang berasal dari Odoo dan jangan hapus histori permintaan toko. Urutkan per dapur dengan `sort_order` lalu nama SKU. Tidak menambahkan tabel `OrderTemplate` atau duplikasi SKU/qty.
