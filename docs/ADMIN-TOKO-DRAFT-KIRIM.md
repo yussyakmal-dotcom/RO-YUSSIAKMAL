@@ -85,3 +85,6 @@ Workspace React dapat dibuka di **http://localhost:900/toko/** setelah build Doc
 - API menolak nilai `1.5`, `0.5`, `1.0` dalam bentuk string, bilangan negatif, dan notasi ilmiah; frontend hanya mengizinkan digit.
 - Draft lama yang masih memiliki Qty desimal tidak otomatis dibulatkan dan harus diedit menjadi integer sebelum Kirim.
 - Kolom PostgreSQL tidak diubah karena persyaratan ini khusus data input toko; bahan baku Odoo bisa memakai satuan pecahan.
+
+## Auto-submit terjadwal H-2 pukul 07.00 WIB
+Backend sekarang memiliki command `auto_submit_store_orders` (default preview); timer harian Debian harus diaktifkan terpisah. Auto-submit mengubah Draft yang sudah ada untuk delivery date H+2 menjadi KIRIM atau NO_ORDER (Qty integer ≥1), serta mencatat `auto_submitted` dan audit. UI menampilkan label "Terkirim otomatis" untuk order final. Kebijakan Draft terlambat setelah cutoff belum diterapkan. Rujukan lengkap: [Auto-submit H-2](./AUTO-SUBMIT-H-2.md).
