@@ -49,10 +49,21 @@ DATABASES = {"default": {
     "HOST": os.getenv("POSTGRES_HOST", "db"),
     "PORT": os.getenv("POSTGRES_PORT", "5432"),
 }}
+# Workspace API uses cookie-backed Django session, not HTTP Basic credentials.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
 LANGUAGE_CODE = "id"
 TIME_ZONE = "Asia/Jakarta"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# V1 Docker serves frontend assets via Django staticfiles in local DEBUG mode.
+# Production deployment will require a static server/reverse proxy.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

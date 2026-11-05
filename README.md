@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md) · [Frontend Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md)
 
 ## Jalankan pengembangan lokal
 
@@ -14,7 +14,7 @@ docker compose exec api python manage.py createsuperuser
 curl http://127.0.0.1:900/health/
 ```
 
-Django Admin: http://127.0.0.1:900/admin/. Service default hanya dibuka di localhost; PostgreSQL tidak diekspos ke host.
+Workspace Admin Toko: **http://127.0.0.1:900/toko/** (login menggunakan superuser atau Group STORE yang punya akses toko). Django Admin tetap di http://127.0.0.1:900/admin/. Service default hanya dibuka di localhost; PostgreSQL tidak diekspos ke host.
 
 ```bash
 docker compose exec api python manage.py check
@@ -71,7 +71,19 @@ Pesanan per **toko × dapur × tanggal kirim × jadwal**. `Simpan Draft` dapat d
 - `POST /api/v1/store-orders/` — simpan atau ganti Qty Draft
 - `POST /api/v1/store-orders/<id>/send/` — Kirim (Qty >= 1), tidak dapat diedit lagi
 
-API membutuhkan akun login, role dan akses toko. Lihat [aturan serta contoh payload](docs/ADMIN-TOKO-DRAFT-KIRIM.md). Frontend React dan auto-submit 07.00 masih tahap berikutnya.
+API membutuhkan akun login, role dan akses toko. Lihat [aturan serta contoh payload](docs/ADMIN-TOKO-DRAFT-KIRIM.md). Frontend React tersedia di `/toko/`; auto-submit 07.00 belum dibangun.
+
+## Workspace Admin Toko — React
+
+Setelah `git pull origin main`, jalankan `docker compose up -d --build --force-recreate api` untuk membangun image Django beserta React/Vite. **Host port tetap 900**; Node hanya berjalan pada tahap Docker build.
+
+Siapkan tiga jadwal default jika belum ada:
+```bash
+docker compose exec api python manage.py seed_order_schedules
+```
+Lalu buka `http://localhost:900/toko/`. Login pertama dapat memakai superuser Django yang sudah ada. Akun toko biasa membutuhkan Group `STORE` dan `UserWarehouseAccess` untuk toko masing-masing. **Simpan Draft** dapat dibuka dan diedit ulang; **Kirim** menyimpan hanya Qty ≥1 dan mengunci pesanan.
+
+Panduan lengkap: [Workspace Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md). Build frontend memerlukan Node 22 pada Docker multi-stage, sehingga tidak perlu memasang Node lokal. `compose.yaml` tidak lagi bind-mount backend agar asset frontend tidak tertimpa. Data PostgreSQL tidak dihapus oleh proses rebuild.
 
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 

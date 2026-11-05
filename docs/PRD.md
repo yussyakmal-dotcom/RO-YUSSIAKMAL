@@ -146,3 +146,10 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Per toko × dapur × delivery date × delivery schedule tetap berstatus independen; hanya order KIRIM masuk konsolidasi.
 - Kuantitas Draft yang sudah tersimpan tidak hilang diam-diam jika template dapur kemudian diubah. Formulir edit dapat memperlihatkan item lama tersebut dengan status tidak aktif di template untuk diperiksa.
 - Implementasi awal API: [Admin Toko — Draft dan Kirim](./ADMIN-TOKO-DRAFT-KIRIM.md). Auto-submit H-2 07.00 WIB tetap direncanakan, belum otomatis berjalan.
+
+## Implementasi UI Admin Toko — 2026-11-05
+- React + TypeScript + Vite mengimplementasikan form massal Qty berdesain enterprise SAP Fiori Horizon-inspired, memakai satu host Django `/toko/` port **900**.
+- Login berbasis Django Session+CSRF; user toko hanya boleh mengakses warehouse toko yang ditugaskan; Administrator dapat melakukan QA dan tindakan tetap tercatat atas dirinya.
+- Pilih Toko, Dapur (template manual), Tanggal Kirim (nilai awal H+2 WIB), Jadwal Kirim; tampilkan SKU/ID + Nama Produk + Qty.
+- Sediakan pencarian, filter Qty ≥1, input keyboard Enter/Tab, Simpan Draft/edit ulang, Kirim terkunci. Dapurnya dapat menampilkan ratusan SKU (praktis sampai 700) tanpa form pilih produk satu per satu.
+- V1 ini mengakses API middleware saja, tidak membuat MO atau transfer Odoo; auto-submit H-2 pukul 07.00 WIB tetap perlu milestone lanjutan.

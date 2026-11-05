@@ -76,3 +76,6 @@ docker compose up -d --build --force-recreate api
 docker compose exec api python manage.py test ro_core
 ```
 Database migration baru tidak dibutuhkan pada milestone ini.
+
+## Frontend yang sekarang tersedia
+Workspace React dapat dibuka di **http://localhost:900/toko/** setelah build Docker versi terbaru. Login memakai Session+CSRF Django; untuk QA gunakan superuser Django. Manajemen jadwal default bisa dijalankan sekali dengan `docker compose exec api python manage.py seed_order_schedules`. Tabel Qty menampilkan daftar template dapur yang sudah diimpor lewat Excel, mengisi Draft dan memanggil endpoint Kirim yang dijelaskan di atas. Panduan: [Workspace Admin Toko](./WORKSPACE-ADMIN-TOKO.md).
