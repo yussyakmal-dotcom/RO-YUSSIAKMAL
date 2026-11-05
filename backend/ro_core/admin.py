@@ -191,11 +191,120 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         return response
 
 
+@admin.register(models.StoreOrder)
+class StoreOrderAdmin(admin.ModelAdmin):
+    """Read-only order headers; status transitions belong to the order API."""
+    list_display = (
+        "id", "store", "kitchen", "delivery_date", "schedule",
+        "status", "auto_submitted", "submitted_at",
+    )
+    list_filter = ("status", "auto_submitted", "delivery_date", "store", "kitchen")
+    search_fields = ("=id", "store__code", "store__name", "kitchen__code")
+    list_select_related = ("store", "kitchen", "schedule")
+    ordering = ("-delivery_date", "-id")
+    date_hierarchy = "delivery_date"
+    fields = (
+        "store", "kitchen", "order_date", "delivery_date", "schedule",
+        "status", "auto_submitted", "submitted_at", "created_at",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(models.StoreOrderLine)
+class StoreOrderLineAdmin(admin.ModelAdmin):
+    """Human-readable *inspection only*: never bypass integer Qty and Kirim lock."""
+    list_display = (
+        "order_number", "store_name", "kitchen_name", "delivery_day",
+        "delivery_slot", "sku", "product_name", "qty_units", "order_status",
+    )
+    list_filter = (
+        "order__status", "order__store", "order__kitchen",
+        "order__delivery_date",
+    )
+    search_fields = (
+        "product__sku", "product__name", "order__store__code",
+        "order__store__name", "order__kitchen__code",
+    )
+    ordering = ("-order__delivery_date", "order__store__code", "product__sku")
+    list_per_page = 100
+    fields = ("order_description", "product_description", "qty_units", "order_status")
+    readonly_fields = fields
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "order__store", "order__kitchen", "order__schedule", "product",
+        )
+
+    @admin.display(description="Order ID", ordering="order_id")
+    def order_number(self, obj):
+        return f"#{obj.order_id}"
+
+    @admin.display(description="Toko", ordering="order__store__code")
+    def store_name(self, obj):
+        return obj.order.store.name
+
+    @admin.display(description="Dapur", ordering="order__kitchen__code")
+    def kitchen_name(self, obj):
+        return obj.order.kitchen.name
+
+    @admin.display(description="Tanggal kirim", ordering="order__delivery_date")
+    def delivery_day(self, obj):
+        return obj.order.delivery_date
+
+    @admin.display(description="Jadwal", ordering="order__schedule__code")
+    def delivery_slot(self, obj):
+        return obj.order.schedule.name
+
+    @admin.display(description="SKU", ordering="product__sku")
+    def sku(self, obj):
+        return obj.product.sku
+
+    @admin.display(description="Nama produk", ordering="product__name")
+    def product_name(self, obj):
+        return obj.product.name
+
+    @admin.display(description="Qty (unit)", ordering="qty")
+    def qty_units(self, obj):
+        if obj.qty == obj.qty.to_integral_value():
+            return str(int(obj.qty))
+        return f"{obj.qty} (perlu koreksi desimal)"
+
+    @admin.display(description="Status", ordering="order__status")
+    def order_status(self, obj):
+        return obj.order.get_status_display()
+
+    @admin.display(description="Pesanan")
+    def order_description(self, obj):
+        return str(obj.order)
+
+    @admin.display(description="Produk")
+    def product_description(self, obj):
+        return str(obj.product)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 # Other models remain in technical Django Admin, not the operational frontend.
 for model in (
     models.Warehouse, models.UserWarehouseAccess, models.Product,
     models.Schedule, models.ProductCapacity, models.MinStockRule,
-    models.StoreOrder, models.StoreOrderLine, models.ProductionPlan,
+    models.ProductionPlan,
     models.ProductionPlanLine, models.MaterialRequestLine,
     models.PackingAllocation, models.DocumentCounter, models.OdooDocument,
     models.AuditLog,
