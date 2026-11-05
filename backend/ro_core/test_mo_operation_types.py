@@ -2,7 +2,8 @@
 from io import StringIO
 from unittest.mock import patch
 
-from django.core.management import call_command, CommandError
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
 from .odoo_readonly import OdooReadOnlyClient
