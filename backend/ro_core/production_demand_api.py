@@ -20,34 +20,67 @@ from .models import (
 )
 
 
-def _quantity_display(value):
-    """Show integer Decimal totals without trailing .0000; never round fractions."""
-    if value is None:
-        return "0"
-    return str(int(value)) if value == value.to_integral_value() else str(value)
-
-
 def _product_uom(value):
-    """Use synced Odoo product UoM, with pcs only when the master is blank."""
+    """Use synced Odoo UoM, with 'pcs' only for missing master UoM."""
     return (value or "").strip() or "pcs"
 
 
-def _order_uom_map(order_ids):
-    """Find one shared UoM for each order, or None for mixed UoMs.
+def _qty_summary(groups, *, invalid=False):
+    """No mixed-unit arithmetic or fractional values on an operations screen.
 
-    Query only the displayed page of orders and avoid N+1 product requests.
+    Keep whole quantities in their original UoM. This is NOT unit conversion.
     """
-    names_by_order = defaultdict(dict)
-    if order_ids:
-        for order_id, raw_uom in StoreOrderLine.objects.filter(
-            order_id__in=order_ids
-        ).values_list("order_id", "product__uom"):
-            name = _product_uom(raw_uom)
-            names_by_order[order_id].setdefault(name.casefold(), name)
+    if invalid:
+        return {
+            "qty_total": None, "qty_uom": None, "qty_by_uom": [],
+            "qty_invalid": True,
+        }
+
+    parts = [
+        {"uom": unit["uom"], "qty": str(unit["qty"])}
+        for _, unit in sorted(groups.items())
+    ]
+    if len(parts) == 1:
+        return {
+            "qty_total": parts[0]["qty"], "qty_uom": parts[0]["uom"],
+            "qty_by_uom": parts, "qty_invalid": False,
+        }
+    if not parts:
+        return {
+            "qty_total": "0", "qty_uom": None,
+            "qty_by_uom": [], "qty_invalid": False,
+        }
     return {
-        order_id: (
-            next(iter(names_by_order[order_id].values()))
-            if len(names_by_order[order_id]) == 1 else None
+        "qty_total": None, "qty_uom": None,
+        "qty_by_uom": parts, "qty_invalid": False,
+    }
+
+
+def _order_qty_summaries(order_ids):
+    """Calculate each order by UoM from its actual lines (no unsafe sums).
+
+    The model currently stores one UoM on each Product rather than on each
+    StoreOrderLine; this handles distinct products with differing units, not
+    conversion/packing of one product into multiple line UoMs.
+    """
+    by_order = defaultdict(dict)
+    invalid_ids = set()
+    if order_ids:
+        for order_id, qty, raw_uom in StoreOrderLine.objects.filter(
+            order_id__in=order_ids
+        ).values_list("order_id", "qty", "product__uom"):
+            if qty < 1 or qty != qty.to_integral_value():
+                invalid_ids.add(order_id)
+                continue
+            uom = _product_uom(raw_uom)
+            key = uom.casefold()
+            unit = by_order[order_id].setdefault(
+                key, {"uom": uom, "qty": 0},
+            )
+            unit["qty"] += int(qty)
+    return {
+        order_id: _qty_summary(
+            by_order[order_id], invalid=(order_id in invalid_ids)
         )
         for order_id in order_ids
     }
@@ -137,7 +170,6 @@ def production_demand(request):
         }, status=status.HTTP_409_CONFLICT)
 
     grouped = {}
-    total_units = 0
     for line in lines:
         item = grouped.setdefault(line.product_id, {
             "product_id": line.product_id,
@@ -149,7 +181,6 @@ def production_demand(request):
         })
         quantity = int(line.qty)
         item["qty_total"] += quantity
-        total_units += quantity
         item["sources"].append({
             "store_code": line.order.store.code,
             "store_name": line.order.store.name,
@@ -179,7 +210,12 @@ def production_demand(request):
         item["qty_total"] = str(item["qty_total"])
         item["store_count"] = len({s["store_code"] for s in item["sources"]})
 
-    recap_uoms = {entry["uom"].casefold(): entry["uom"] for entry in items}
+    by_uom = {}
+    for entry in items:
+        key = entry["uom"].casefold()
+        unit = by_uom.setdefault(key, {"uom": entry["uom"], "qty": 0})
+        unit["qty"] += int(entry["qty_total"])
+    qty_summary = _qty_summary(by_uom)
 
     return Response({
         "delivery_date": delivery_date.isoformat(),
@@ -196,8 +232,7 @@ def production_demand(request):
             "stores_sent": status_counts[StoreOrder.Status.KIRIM],
             "stores_in_production": status_counts[StoreOrder.Status.PROSES_PRODUKSI],
             "sku_count": len(items),
-            "qty_total": str(total_units),
-            "qty_uom": next(iter(recap_uoms.values())) if len(recap_uoms) == 1 else None,
+            **qty_summary,
         },
         "store_statuses": store_statuses,
         "items": items,
@@ -225,7 +260,7 @@ def recent_final_store_orders(request):
         )
         .order_by("-recent_at", "-pk")[:30]
     )
-    recent_uoms = _order_uom_map([order.pk for order in orders])
+    recent_summaries = _order_qty_summaries([order.pk for order in orders])
     return Response({
         "limit": 30,
         "items": [
@@ -241,8 +276,7 @@ def recent_final_store_orders(request):
                 "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
                 "auto_submitted": order.auto_submitted,
                 "sku_count": order.line_count,
-                "qty_total": _quantity_display(order.qty_total),
-                "qty_uom": recent_uoms[order.pk],
+                **recent_summaries[order.pk],
             }
             for order in orders
         ],
@@ -302,7 +336,7 @@ def production_inbox(request):
         [start:start + page_size]
     )
 
-    inbox_uoms = _order_uom_map([order.pk for order in orders])
+    inbox_summaries = _order_qty_summaries([order.pk for order in orders])
     return Response({
         "status_filter": selected,
         "page": page,
@@ -326,8 +360,7 @@ def production_inbox(request):
                 "schedule_code": order.schedule.code,
                 "schedule_name": order.schedule.name,
                 "sku_count": order.line_count,
-                "qty_total": _quantity_display(order.qty_total),
-                "qty_uom": inbox_uoms[order.pk],
+                **inbox_summaries[order.pk],
                 "auto_submitted": order.auto_submitted,
             }
             for order in orders
