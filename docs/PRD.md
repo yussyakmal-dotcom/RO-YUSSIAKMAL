@@ -166,3 +166,11 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Template timer systemd tersedia; **baru bekerja otomatis setelah administrator meng-enable di Debian**, bukan langsung saat deploy code.
 - Manual Kirim dan Auto Kirim memakai status yang sama untuk konsolidasi, dibedakan `auto_submitted` dan audit log.
 - **Belum final:** apakah API harus menolak edit/new Draft setelah cutoff 07 H-2, dan apakah downtime harus otomatis catch-up. Jangan anggap fungsi cutoff benar-benar enforcement sampai kebijakan ini disepakati.
+
+## Milestone Admin Produksi — Rekap read-only (2026-11-06)
+- `KIRIM` per toko adalah satu-satunya sumber rekap kebutuhan. API dan React menampilkan **tanggal kirim × dapur × jadwal kirim → total Qty per SKU**, dengan rincian order/toko.
+- Status toko DRAFT, NO_ORDER, dan belum membuat pesanan dipantau terpisah, tanpa memasukkan Qty mereka ke total.
+- Rekap final tetap menyertakan SKU yang saat ini dipindahkan/nonaktif pada template middleware, untuk menjaga histori pesanan final.
+- Akses khusus Group PRODUCTION/ADMIN/superuser, tanpa hak mengedit pesanan toko.
+- Tahap ini **read-only**: tidak membuat ProductionPlan, tidak memanggil API tulis Odoo. **Tanggal produksi dan jadwal produksi belum otomatis diturunkan** dari tanggal/jadwal pengiriman sampai SOP-nya ditetapkan.
+- Detail pengujian: [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
