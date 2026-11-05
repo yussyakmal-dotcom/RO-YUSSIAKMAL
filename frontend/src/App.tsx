@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  ApiError, initializeSession, loadOrder, login, logout, saveDraft, sendOrder,
+  initializeSession, loadOrder, login, logout, saveDraft, sendOrder,
   type OrderContext, type OrderItem, type SessionInfo, type StoreOrder,
 } from "./api";
 import { deliveryDateInWib, hasPositiveQty, normalizeQty } from "./utils";
@@ -73,7 +73,7 @@ function LoginPage({ onSuccess }: { onSuccess: (value: SessionInfo) => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setError("");
