@@ -111,3 +111,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-010 (❓ tahapan berikutnya):** Initial mapping SKU→dapur belum terisi/dikonfirmasi oleh hasil impor ini; perlu menentukan sumber mapping di Odoo sebelum Workspace Admin Toko memfilter katalog per dapur.
 - Tidak ada bukti dalam hasil ini bahwa 957 BoM mewakili seluruh SKU, stok live sudah sinkron, atau API transaksi MO/DO sudah siap.
 - Lihat [hasil verifikasi connector](./ODOO-CONNECTOR.md#verifikasi-tenant-nyata--2026-11-05).
+
+## Konfirmasi sumber mapping dapur — 2026-11-05
+- **D-042 (✅):** Pengguna menunjukkan layar daftar produk Odoo yang dikelompokkan berdasarkan *Product Category* dan menjelaskan bahwa **mapping dapur berasal dari kategori**. Terlihat secara eksplisit kategori **Legit**, **Paket**, dan **Pastry**.
+- **I-011 (✅ implementasi):** Perintah `init_kitchen_mapping` membuat mapping awal dari `Product.category` yang sudah tersinkron ke PostgreSQL, **default preview** dan `--apply` hanya untuk produk yang belum punya mapping.
+- **I-012 (usulan yang dapat diperiksa):** Label kategori lain yang sama persis dengan nama dapur dipetakan menurut daftar warehouse; belum dikonfirmasi secara visual, sehingga kategori tak cocok dibiarkan belum dipetakan dan harus diperiksa melalui preview.
+- **I-010 diperjelas:** Sumber mapping awal yang sebelumnya terbuka kini ditetapkan sebagai kategori produk Odoo. Pemetaan aktual di server **belum** dijalankan sampai pengguna memeriksa preview dan memilih `--apply`.
+- PRD dan [panduan connector](./ODOO-CONNECTOR.md#initial-mapping-sku--dapur-dari-product-category) telah diperbarui. Tidak perlu migration database baru.
