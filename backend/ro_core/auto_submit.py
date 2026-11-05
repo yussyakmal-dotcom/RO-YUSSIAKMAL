@@ -4,7 +4,7 @@ Run via the server's systemd timer at 07:00 Asia/Jakarta. This module never
 creates an order for combinations that have no Draft, and never writes Odoo.
 A transaction and row lock per order make repeat/overlapping runs idempotent.
 """
-from datetime import datetime, time, timedelta
+from datetime import time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -55,7 +55,7 @@ def auto_submit_drafts(*, apply=False, now=None):
         "sent": 0,
         "no_order": 0,
         "invalid_drafts": 0,
-        "skipped_locked_or_changed": 0,
+        "skipped_already_finalized": 0,
         "items_sent": 0,
         "items_removed": 0,
         "invalid_order_ids": [],
@@ -83,7 +83,7 @@ def auto_submit_drafts(*, apply=False, now=None):
     for order_id in ids:
         with transaction.atomic():
             order = (
-                StoreOrder.objects.select_for_update(skip_locked=True)
+                StoreOrder.objects.select_for_update()
                 .filter(
                     pk=order_id,
                     status=StoreOrder.Status.DRAFT,
@@ -92,7 +92,7 @@ def auto_submit_drafts(*, apply=False, now=None):
                 .first()
             )
             if order is None:
-                result["skipped_locked_or_changed"] += 1
+                result["skipped_already_finalized"] += 1
                 continue
 
             lines = list(order.lines.only("pk", "qty").order_by("pk"))
