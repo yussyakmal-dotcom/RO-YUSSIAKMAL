@@ -185,3 +185,13 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-038 (✅ UX):** User melaporkan pesanan Toko Bandara/Kedaton sudah KIRIM, tetapi tidak tampak di rekap produksi. Pemeriksaan kode menunjukkan rekap memerlukan kecocokan **tanggal kirim + dapur + jadwal** persis, sedangkan frontend mengisi default H+2 dan jadwal pertama; data yang tidak cocok tampak NOT_ENTERED pada lingkup yang dipilih.
 - **I-039 (✅ solusi diagnostik):** Tambah API read-only Group PRODUCTION/ADMIN `/api/v1/production/recent-orders/` (maksimal 30 KIRIM terbaru dari semua lingkup) dan panel **Temukan Pesanan yang Sudah Kirim**. Klik `Lihat rekap` menyelaraskan 3 filter tanpa mengubah data.
 - **O-017 (perlu verifikasi data nyata):** Filter tepat untuk pesanan Toko Bandara/Kedaton baru dapat dipastikan dari database Debian operator. Tidak ada akses langsung ke PostgreSQL tenant pengguna dari GitHub.
+
+## Koreksi alur antarmuka Admin Produksi — 2026-11-06
+- **D-052 (✅ keputusan pengguna):** Halaman utama Admin Produksi adalah **daftar seluruh StoreOrder dengan status KIRIM atau PROSES_PRODUKSI**, bukan rekap yang memerlukan filter tanggal/dapur/jadwal lebih dulu.
+- **D-053 (✅):** Setelah permintaan toko **benar-benar dikonsolidasi**, status `KIRIM → PROSES_PRODUKSI`. `DRAFT` dan `NO_ORDER` tidak tampil pada Admin Produksi.
+- **I-040 (✅):** Tambah status `PROSES_PRODUKSI` ke StoreOrder dan migration 0003 untuk memperbesar CharField. Existing pesanan tetap KIRIM, tidak diubah saat upgrade.
+- **I-041 (✅):** API `/api/v1/production/orders/` menampilkan KIRIM dan PROSES_PRODUKSI lintas tanggal/dapur/jadwal, filter dua status, pagination 50, akses hanya PRODUCTION/ADMIN. UI `/produksi/` langsung menampilkan antrean tersebut.
+- **I-042 (✅):** Rekap per SKU menghitung KIRIM dan PROSES_PRODUKSI, tanpa menampilkan Draft/No Order; perubahan status tidak membuat Qty dihitung dua kali.
+- **O-018 (batas fitur):** Tombol konsolidasi dan transisi status otomatis baru akan dibuat bersamaan dengan implementasi **ProductionPlan nyata**; belum boleh mengganti status hanya karena operator membuka rekap. Tanggal produksi/SOP lintas tengah malam tetap belum ditetapkan.
+- **Koreksi I-033/I-034/I-038/I-039:** Desain default rekap berdasarkan filter dan panel pencarian KIRIM terbaru telah digantikan oleh antrean pesanan global. Endpoint lama boleh tetap untuk kompatibilitas tetapi UI utama tidak memakainya.
+- Lihat [alur terbaru Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).

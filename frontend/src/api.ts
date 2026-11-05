@@ -8,7 +8,7 @@ export interface SessionInfo {
   schedules: NamedOption[];
 }
 
-export type OrderStatus = "DRAFT" | "KIRIM" | "NO_ORDER";
+export type OrderStatus = "DRAFT" | "KIRIM" | "PROSES_PRODUKSI" | "NO_ORDER";
 export interface OrderItem {
   product_id: number;
   sku: string;
@@ -146,21 +146,19 @@ export async function sendOrder(orderId: number): Promise<SendResult> {
   });
 }
 
-export type ProductionStoreStatus = "KIRIM" | "NO_ORDER" | "DRAFT" | "NOT_ENTERED";
+export type ProductionStoreStatus = "KIRIM" | "PROSES_PRODUKSI";
 
 export interface ProductionDemand {
   delivery_date: string;
   kitchen: NamedOption;
   schedule: NamedOption;
-  basis: "FINAL_KIRIM_ONLY";
+  basis: "KIRIM_AND_PROSES_PRODUKSI";
   production_date: null;
   note: string;
   summary: {
     stores_total: number;
     stores_sent: number;
-    stores_no_order: number;
-    stores_draft: number;
-    stores_not_entered: number;
+    stores_in_production: number;
     sku_count: number;
     qty_total: string;
   };
@@ -183,6 +181,7 @@ export interface ProductionDemand {
       order_id: number;
       qty: string;
       auto_submitted: boolean;
+      status: ProductionQueueStatus;
     }[];
   }[];
 }
@@ -216,5 +215,39 @@ export interface RecentSentOrder {
 export function loadRecentSentOrders(signal?: AbortSignal): Promise<{ limit: number; items: RecentSentOrder[] }> {
   return apiRequest<{ limit: number; items: RecentSentOrder[] }>(
     "/api/v1/production/recent-orders/", { signal },
+  );
+}
+
+export type ProductionQueueStatus = "KIRIM" | "PROSES_PRODUKSI";
+export type ProductionInboxFilter = "ALL" | ProductionQueueStatus;
+export interface ProductionInboxOrder {
+  order_id: number;
+  status: ProductionQueueStatus;
+  store_code: string;
+  store_name: string;
+  kitchen_code: string;
+  kitchen_name: string;
+  delivery_date: string;
+  schedule_code: string;
+  schedule_name: string;
+  sku_count: number;
+  qty_total: string;
+  auto_submitted: boolean;
+}
+export interface ProductionInbox {
+  status_filter: ProductionInboxFilter;
+  page: number;
+  page_size: number;
+  total: number;
+  has_more: boolean;
+  counts: { all: number; kirim: number; proses_produksi: number };
+  items: ProductionInboxOrder[];
+}
+export function loadProductionInbox(
+  status: ProductionInboxFilter = "ALL", page = 1, signal?: AbortSignal,
+): Promise<ProductionInbox> {
+  const query = new URLSearchParams({ status, page: String(page) });
+  return apiRequest<ProductionInbox>(
+    "/api/v1/production/orders/?" + query.toString(), { signal },
   );
 }

@@ -98,11 +98,10 @@ class ProductionDemandTests(TestCase):
         response = self.request_recap()
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
-        self.assertEqual(data["basis"], "FINAL_KIRIM_ONLY")
+        self.assertEqual(data["basis"], "KIRIM_AND_PROSES_PRODUKSI")
         self.assertIsNone(data["production_date"])
         self.assertEqual(data["summary"], {
-            "stores_total": 3, "stores_sent": 2, "stores_no_order": 0,
-            "stores_draft": 1, "stores_not_entered": 0,
+            "stores_total": 2, "stores_sent": 2, "stores_in_production": 0,
             "sku_count": 2, "qty_total": "82",
         })
         self.assertEqual(
@@ -119,28 +118,29 @@ class ProductionDemandTests(TestCase):
             {s["order_id"] for s in risoles["sources"]}, {a.pk, b.pk},
         )
         self.assertEqual(risoles["sources"][1]["auto_submitted"], True)
-        self.assertEqual(
-            {s["store_code"]: s["status"] for s in data["store_statuses"]}["T_MET"],
-            "DRAFT",
+        self.assertNotIn(
+            "T_MET", {s["store_code"] for s in data["store_statuses"]}
         )
         self.assertFalse(AuditLog.objects.exists())
         self.assertFalse(
             StoreOrder.objects.exclude(status__in=["DRAFT", "KIRIM"]).exists()
         )
 
-    def test_no_order_and_not_entered_are_not_implicitly_zero_orders(self):
+    def test_no_order_and_not_entered_are_invisible_in_production(self):
         self.create_order(self.store_a, "NO_ORDER")
         self.create_order(self.store_b, "KIRIM", [(self.risoles, 10)])
         self.client.force_login(self.production_user)
         data = self.request_recap().json()
-        self.assertEqual(data["summary"]["stores_no_order"], 1)
-        self.assertEqual(data["summary"]["stores_not_entered"], 1)
+        self.assertEqual(data["summary"]["stores_total"], 1)
         self.assertEqual(data["summary"]["stores_sent"], 1)
+        self.assertEqual(data["summary"]["stores_in_production"], 0)
         self.assertEqual(data["items"][0]["qty_total"], "10")
         self.assertEqual(
             {s["store_code"]: s["status"] for s in data["store_statuses"]},
-            {"T_BAN": "NO_ORDER", "T_KD": "KIRIM", "T_MET": "NOT_ENTERED"},
+            {"T_KD": "KIRIM"},
         )
+        self.assertNotIn("stores_draft", data["summary"])
+        self.assertNotIn("stores_no_order", data["summary"])
 
     def test_isolates_kitchen_date_schedule_and_inactive_template(self):
         assignment = ProductionAssignment.objects.get(product=self.risoles)
@@ -281,3 +281,101 @@ class ProductionDemandTests(TestCase):
         output = self.client.get(url)
         self.assertEqual(output.status_code, 200, output.content)
         self.assertEqual(len(output.json()["items"]), 30)
+
+    def test_inbox_shows_kirim_and_processing_across_all_dates(self):
+        pending = self.create_order(
+            self.store_a, "KIRIM", [(self.risoles, 25)],
+            delivery_date="2026-11-07",
+        )
+        processing = self.create_order(
+            self.store_b, "PROSES_PRODUKSI", [(self.risoles, 40)],
+            delivery_date="2026-11-09", schedule=self.pagi,
+        )
+        self.create_order(self.store_c, "DRAFT", [(self.risoles, 999)])
+        self.create_order(self.store_a, "NO_ORDER", delivery_date="2026-11-11")
+        self.client.force_login(self.production_user)
+
+        inbox = self.client.get(reverse("production-inbox"))
+        self.assertEqual(inbox.status_code, 200, inbox.content)
+        data = inbox.json()
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["counts"], {
+            "all": 2, "kirim": 1, "proses_produksi": 1
+        })
+        self.assertEqual([x["order_id"] for x in data["items"]], [pending.pk, processing.pk])
+        self.assertEqual([x["status"] for x in data["items"]], ["KIRIM", "PROSES_PRODUKSI"])
+        self.assertEqual(
+            [x["delivery_date"] for x in data["items"]],
+            ["2026-11-07", "2026-11-09"],
+        )
+        self.assertEqual([x["qty_total"] for x in data["items"]], ["25.0000", "40.0000"])
+        self.assertNotIn("DRAFT", str(data))
+        self.assertNotIn("NO_ORDER", str(data))
+        self.assertEqual(AuditLog.objects.count(), 0)
+
+        only_sent = self.client.get(reverse("production-inbox"), {"status": "KIRIM"}).json()
+        only_processing = self.client.get(
+            reverse("production-inbox"), {"status": "PROSES_PRODUKSI"}
+        ).json()
+        self.assertEqual([x["order_id"] for x in only_sent["items"]], [pending.pk])
+        self.assertEqual([x["order_id"] for x in only_processing["items"]], [processing.pk])
+
+    def test_inbox_pagination_shows_every_eligible_order(self):
+        from datetime import date, timedelta
+
+        for n in range(58):
+            self.create_order(
+                self.store_a, "KIRIM", [(self.risoles, 1)],
+                delivery_date=(date(2026, 11, 1) + timedelta(days=n)).isoformat(),
+            )
+        self.client.force_login(self.production_user)
+        one = self.client.get(reverse("production-inbox"), {"page": 1})
+        two = self.client.get(reverse("production-inbox"), {"page": 2})
+        self.assertEqual(one.status_code, 200, one.content)
+        self.assertEqual(two.status_code, 200, two.content)
+        self.assertEqual(one.json()["total"], 58)
+        self.assertEqual(len(one.json()["items"]), 50)
+        self.assertTrue(one.json()["has_more"])
+        self.assertEqual(len(two.json()["items"]), 8)
+        self.assertFalse(two.json()["has_more"])
+        all_ids = [r["order_id"] for r in one.json()["items"] + two.json()["items"]]
+        self.assertEqual(len(set(all_ids)), 58)
+
+    def test_inbox_denies_store_users_and_invalid_filters(self):
+        url = reverse("production-inbox")
+        self.assertIn(self.client.get(url).status_code, (401, 403))
+        self.client.force_login(self.store_user)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.production_user)
+        self.assertEqual(self.client.get(url, {"status": "DRAFT"}).status_code, 400)
+        self.assertEqual(self.client.get(url, {"status": "NO_ORDER"}).status_code, 400)
+        self.assertEqual(self.client.get(url, {"page": "0"}).status_code, 400)
+        self.assertEqual(
+            self.client.post(url, {}, content_type="application/json").status_code,
+            405,
+        )
+        self.assertEqual(StoreOrder.objects.count(), 0)
+
+    def test_rekap_includes_processing_without_double_count_and_no_draft(self):
+        self.create_order(
+            self.store_a, "KIRIM", [(self.risoles, 25)],
+        )
+        self.create_order(
+            self.store_b, "PROSES_PRODUKSI", [(self.risoles, 40)],
+        )
+        self.create_order(
+            self.store_c, "DRAFT", [(self.risoles, 999)],
+        )
+        self.client.force_login(self.production_user)
+        response = self.request_recap()
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(data["summary"]["qty_total"], "65")
+        self.assertEqual(data["summary"]["stores_sent"], 1)
+        self.assertEqual(data["summary"]["stores_in_production"], 1)
+        self.assertEqual(data["items"][0]["store_count"], 2)
+        self.assertEqual(
+            [(src["status"], src["qty"]) for src in data["items"][0]["sources"]],
+            [("KIRIM", "25"), ("PROSES_PRODUKSI", "40")],
+        )
+        self.assertEqual(StoreOrder.objects.filter(status="DRAFT").count(), 1)

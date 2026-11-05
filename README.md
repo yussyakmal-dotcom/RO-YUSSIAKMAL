@@ -125,3 +125,17 @@ docker compose up -d --build --force-recreate api
 Buka `http://localhost:900/produksi/` dan panel **Temukan Pesanan yang Sudah Kirim**. Daftar ini menampilkan pesanan KIRIM terbaru lintas tanggal, dapur, dan jadwal. Klik **Lihat rekap** agar ketiga filter sesuai dengan pesanan tersebut. **Tanggal awal H+2 bukan otomatis tanggal Kirim terakhir.** Jika tidak ada di 30 pesanan terbaru, cek Django Admin → Store orders.
 
 API pendukung (auth PRODUCTION/ADMIN, read-only): `GET /api/v1/production/recent-orders/`. Tidak ada migrasi atau perubahan data pesanan. Baca [panduan rekap](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Antrean Admin Produksi yang diperbaiki (November 2026)
+
+Buka `http://localhost:900/produksi/`: langsung tampil **seluruh StoreOrder status KIRIM dan PROSES_PRODUKSI**, lintas tanggal/dapur/jadwal. Tersedia tab Semua / Kirim / Proses Produksi dan pagination 50 pesanan. **Draft dan No Order tidak muncul.** Klik Lihat rincian untuk rekap SKU/toko pada tanggal/dapur/jadwal pesanan.
+
+API: `GET /api/v1/production/orders/?status=ALL&page=1` (PRODUCTION/ADMIN). `PROSES_PRODUKSI` memerlukan migration 0003; pesanan existing tidak otomatis berubah status. **Transisi status akan dilakukan hanya saat penyimpanan konsolidasi ProductionPlan diimplementasikan**, bukan dengan sekadar membuka rekap.
+
+```bash
+git pull origin main
+docker compose up -d --build --force-recreate api
+docker compose exec api python manage.py migrate --noinput
+```
+
+Panduan lengkap: [Antrean Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).

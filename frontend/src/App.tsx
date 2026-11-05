@@ -7,11 +7,11 @@ import { deliveryDateInWib, hasPositiveQty, normalizeQty } from "./utils";
 
 type Busy = "save" | "send" | null;
 
-function StatusBadge({ status, automatic }: { status: "DRAFT" | "KIRIM" | "NO_ORDER"; automatic: boolean }) {
+function StatusBadge({ status, automatic }: { status: "DRAFT" | "KIRIM" | "PROSES_PRODUKSI" | "NO_ORDER"; automatic: boolean }) {
   return (
     <span className={"status-chip " + status.toLowerCase()}>
       <span className="status-dot" />
-      {status === "DRAFT" ? "Draft · Bisa diedit" : status === "KIRIM" ? (automatic ? "Terkirim otomatis" : "Sudah dikirim") : (automatic ? "No Order otomatis" : "No Order")}
+      {status === "DRAFT" ? "Draft · Bisa diedit" : status === "KIRIM" ? (automatic ? "Terkirim otomatis" : "Sudah dikirim") : status === "PROSES_PRODUKSI" ? "Proses Produksi" : (automatic ? "No Order otomatis" : "No Order")}
     </span>
   );
 }
@@ -488,7 +488,7 @@ function App() {
 
               <footer className="action-bar">
                 <div className="action-info">
-                  <strong>{order?.status === "KIRIM" ? "Pesanan telah dikirim" : order?.status === "NO_ORDER" ? "Tidak ada pesanan" : "Pesanan belum dikirim"}</strong>
+                  <strong>{order?.status === "KIRIM" ? "Pesanan telah dikirim" : order?.status === "PROSES_PRODUKSI" ? "Sedang diproses produksi" : order?.status === "NO_ORDER" ? "Tidak ada pesanan" : "Pesanan belum dikirim"}</strong>
                   <span>{order?.status === "DRAFT" ? "Simpan Draft untuk melanjutkan pengisian nanti." : "Pesanan sudah terkunci."}</span>
                 </div>
                 <div className="action-buttons">

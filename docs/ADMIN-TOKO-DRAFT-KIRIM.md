@@ -91,3 +91,6 @@ Backend sekarang memiliki command `auto_submit_store_orders` (default preview); 
 
 ## Pemeriksaan pesanan melalui Django Admin
 Menu `Store orders` dan `Store order lines` sekarang **hanya untuk melihat** rincian pesanan. Tabel detail memperlihatkan toko, dapur, tanggal kirim, jadwal, SKU, nama dan Qty integer (contoh data basis `78.0000` ditampilkan sebagai `78`). Admin tidak dapat menambah/mengedit/menghapus baris langsung: semua perubahan Draft wajib lewat Workspace Toko `/toko/`. Baris setelah KIRIM/NO_ORDER tidak boleh diedit. Kuantitas lama yang pecahan ditandai sebagai masalah data, bukan dibulatkan.
+
+## Sesudah Kirim (November 2026)
+Permintaan yang statusnya **KIRIM** segera tampil dalam antrean Admin Produksi, tanpa pengguna produksi harus mencari tanggal. Setelah konsolidasi rencana produksi yang berhasil disimpan (fitur lanjutan), status menjadi **PROSES_PRODUKSI**. Kedua status tersebut tetap terkunci bagi Admin Toko dan bisa dilihat read-only. Draft/NO_ORDER tidak tampil pada Admin Produksi.

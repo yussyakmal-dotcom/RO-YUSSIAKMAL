@@ -258,3 +258,30 @@ a { color: #1769af; }
   .production-recent-heading { flex-direction: column; align-items: stretch; padding: 17px; }
   .production-recent-body { padding: 0 17px 17px; }
 }
+
+/* Two-stage production order inbox. */
+.status-chip.proses_produksi { color: #155b9c; border-color: #bfd9ef; background: #edf6ff; }
+.production-inbox-tabs { display: flex; gap: 9px; flex-wrap: wrap; margin: 18px 0; }
+.production-tab { border: 1px solid #cbd9e7; background: #fff; border-radius: 7px; padding: 11px 15px; font-size: 13px; color: #45637e; font-weight: 700; }
+.production-tab.selected { color: #075d9c; border-color: #7ab4e1; background: #eaf5ff; }
+.production-inbox-table { width: 100%; min-width: 780px; border-collapse: collapse; font-size: 12px; }
+.production-inbox-table th { text-align: left; padding: 13px 15px; color: #627c94; background: #f5f8fc; border-bottom: 1px solid #dbe5ed; }
+.production-inbox-table td { padding: 12px 15px; color: #344d67; border-bottom: 1px solid #edf1f6; }
+.production-inbox-table tr:last-child td { border-bottom: 0; }
+.production-inbox-table td strong { display: block; font-size: 12px; }
+.production-inbox-table td small { display: block; color: #7d91a4; margin-top: 4px; }
+.production-inbox-table td.qty { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.production-state { display: inline-block; font-size: 11px; font-weight: 750; padding: 7px 10px; border-radius: 15px; white-space: nowrap; }
+.production-state.kirim { background: #e9f7ef; color: #137647; }
+.production-state.proses_produksi { background: #e7f1fe; color: #155f9e; }
+.production-inbox-empty { text-align: center; padding: 35px; color: #788da3; }
+.production-inbox-footer { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.production-scope { margin-top: 21px; }
+.production-scope-meta { color: #71869c; font-size: 12px; margin: 8px 0 0; }
+.production-scope-header { padding: 20px 23px 15px; display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.production-scope-summary { padding: 0 22px 15px; color: #43627d; font-weight: 700; font-size: 13px; }
+.production-scope-details { padding: 15px 22px; }
+.production-scope-details details { padding: 9px 0; border-bottom: 1px solid #e9eff6; }
+.production-scope-details summary { cursor: pointer; color: #294d6d; font-size: 12px; font-weight: 700; }
+.production-scope-details p { font-size: 12px; margin: 8px 0 0 18px; color: #718296; }
+@media(max-width:730px){.production-inbox-footer {flex-direction:column;align-items:stretch}.production-scope-header{flex-direction:column}}

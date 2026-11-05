@@ -5,7 +5,7 @@ slot. Do not infer production date, create plans, or write to Odoo. Preserve
 per-store traceability even when a SKU's template mapping changes later.
 """
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Case, When, Value, IntegerField
 from django.db.models.functions import Coalesce
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -54,38 +54,33 @@ def production_demand(request):
         schedule=schedule,
         delivery_date=delivery_date,
         store__kind=Warehouse.Kind.STORE,
+        status__in=(StoreOrder.Status.KIRIM, StoreOrder.Status.PROSES_PRODUKSI),
     )
-    headers = {
-        order.store_id: order
-        for order in order_scope.select_related("store").order_by("store__code")
-    }
-    stores = list(
-        Warehouse.objects.filter(kind=Warehouse.Kind.STORE, active=True)
-        .order_by("code")
+    headers = list(
+        order_scope.select_related("store").order_by("store__code", "pk")
     )
     status_counts = {
-        StoreOrder.Status.KIRIM: 0,
-        StoreOrder.Status.NO_ORDER: 0,
-        StoreOrder.Status.DRAFT: 0,
-        "NOT_ENTERED": 0,
+        StoreOrder.Status.KIRIM: sum(
+            order.status == StoreOrder.Status.KIRIM for order in headers
+        ),
+        StoreOrder.Status.PROSES_PRODUKSI: sum(
+            order.status == StoreOrder.Status.PROSES_PRODUKSI for order in headers
+        ),
     }
-    store_statuses = []
-    for store in stores:
-        order = headers.get(store.pk)
-        label = order.status if order else "NOT_ENTERED"
-        status_counts[label] += 1
-        store_statuses.append({
-            "store_code": store.code,
-            "store_name": store.name,
-            "status": label,
-            "order_id": order.pk if order else None,
-            "auto_submitted": order.auto_submitted if order else False,
-        })
+    store_statuses = [
+        {
+            "store_code": order.store.code,
+            "store_name": order.store.name,
+            "status": order.status,
+            "order_id": order.pk,
+            "auto_submitted": order.auto_submitted,
+        }
+        for order in headers
+    ]
 
     lines = list(
-        StoreOrderLine.objects.filter(
-            order__in=order_scope.filter(status=StoreOrder.Status.KIRIM)
-        ).select_related("product", "order__store")
+        StoreOrderLine.objects.filter(order__in=order_scope)
+        .select_related("product", "order__store")
         .order_by("product__sku", "product_id", "order__store__code", "order_id")
     )
 
@@ -99,7 +94,7 @@ def production_demand(request):
     if invalid:
         return Response({
             "detail": (
-                "Rekap diblokir: ada baris KIRIM dengan Qty nol, negatif, "
+                "Rekap diblokir: ada baris pesanan final dengan Qty nol, negatif, "
                 "atau desimal. Periksa data pesanan; tidak ada pembulatan otomatis."
             ),
             "invalid_lines": invalid[:50],
@@ -125,6 +120,7 @@ def production_demand(request):
             "order_id": line.order_id,
             "qty": str(quantity),
             "auto_submitted": line.order.auto_submitted,
+            "status": line.order.status,
         })
 
     # Display order is middleware-owned; current template flag MUST NOT
@@ -151,18 +147,16 @@ def production_demand(request):
         "delivery_date": delivery_date.isoformat(),
         "kitchen": {"code": kitchen.code, "name": kitchen.name},
         "schedule": {"code": schedule.code, "name": schedule.name},
-        "basis": "FINAL_KIRIM_ONLY",
+        "basis": "KIRIM_AND_PROSES_PRODUKSI",
         "production_date": None,
         "note": (
             "Tanggal produksi belum ditetapkan. Rekap ini berdasarkan "
             "tanggal dan jadwal kirim; bukan ProductionPlan atau MO."
         ),
         "summary": {
-            "stores_total": len(stores),
+            "stores_total": len(headers),
             "stores_sent": status_counts[StoreOrder.Status.KIRIM],
-            "stores_no_order": status_counts[StoreOrder.Status.NO_ORDER],
-            "stores_draft": status_counts[StoreOrder.Status.DRAFT],
-            "stores_not_entered": status_counts["NOT_ENTERED"],
+            "stores_in_production": status_counts[StoreOrder.Status.PROSES_PRODUKSI],
             "sku_count": len(items),
             "qty_total": str(total_units),
         },
@@ -208,6 +202,90 @@ def recent_final_store_orders(request):
                 "auto_submitted": order.auto_submitted,
                 "sku_count": order.line_count,
                 "qty_total": str(order.qty_total or 0),
+            }
+            for order in orders
+        ],
+    })
+
+
+class ProductionInboxQuery(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=("ALL", StoreOrder.Status.KIRIM, StoreOrder.Status.PROSES_PRODUKSI),
+        required=False, default="ALL",
+    )
+    page = serializers.IntegerField(min_value=1, max_value=100000, required=False, default=1)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def production_inbox(request):
+    """Global production queue, no implicit date/kitchen/slot filter.
+
+    Only KIRIM and PROSES_PRODUKSI are visible. DRAFT and NO_ORDER are
+    intentionally not included, and neither pagination nor filtering writes
+    database state. Status changes occur only after a real consolidation step.
+    """
+    _production_access(request.user)
+    query = ProductionInboxQuery(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    selected = query.validated_data["status"]
+    page = query.validated_data["page"]
+
+    eligible = StoreOrder.objects.filter(
+        status__in=(StoreOrder.Status.KIRIM, StoreOrder.Status.PROSES_PRODUKSI),
+        store__kind=Warehouse.Kind.STORE,
+    )
+    counts = {
+        StoreOrder.Status.KIRIM: eligible.filter(status=StoreOrder.Status.KIRIM).count(),
+        StoreOrder.Status.PROSES_PRODUKSI: eligible.filter(
+            status=StoreOrder.Status.PROSES_PRODUKSI
+        ).count(),
+    }
+    records = eligible if selected == "ALL" else eligible.filter(status=selected)
+    page_size = 50
+    total = records.count()
+    start = (page - 1) * page_size
+
+    orders = (
+        records.select_related("store", "kitchen", "schedule")
+        .annotate(
+            line_count=Count("lines"),
+            qty_total=Sum("lines__qty"),
+            priority=Case(
+                When(status=StoreOrder.Status.KIRIM, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            ),
+        )
+        .order_by("priority", "delivery_date", "kitchen__code", "schedule__sort_order", "store__code", "pk")
+        [start:start + page_size]
+    )
+
+    return Response({
+        "status_filter": selected,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": start + page_size < total,
+        "counts": {
+            "kirim": counts[StoreOrder.Status.KIRIM],
+            "proses_produksi": counts[StoreOrder.Status.PROSES_PRODUKSI],
+            "all": sum(counts.values()),
+        },
+        "items": [
+            {
+                "order_id": order.pk,
+                "status": order.status,
+                "store_code": order.store.code,
+                "store_name": order.store.name,
+                "kitchen_code": order.kitchen.code,
+                "kitchen_name": order.kitchen.name,
+                "delivery_date": order.delivery_date.isoformat(),
+                "schedule_code": order.schedule.code,
+                "schedule_name": order.schedule.name,
+                "sku_count": order.line_count,
+                "qty_total": str(order.qty_total or 0),
+                "auto_submitted": order.auto_submitted,
             }
             for order in orders
         ],

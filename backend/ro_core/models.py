@@ -125,6 +125,7 @@ class StoreOrder(models.Model):
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
         KIRIM = "KIRIM", "Kirim"
+        PROSES_PRODUKSI = "PROSES_PRODUKSI", "Proses Produksi"
         NO_ORDER = "NO_ORDER", "No Order"
 
     store = models.ForeignKey(
@@ -137,7 +138,7 @@ class StoreOrder(models.Model):
     delivery_date = models.DateField()
     schedule = models.ForeignKey(Schedule, on_delete=models.PROTECT)
     status = models.CharField(
-        max_length=12, choices=Status.choices, default=Status.DRAFT
+        max_length=20, choices=Status.choices, default=Status.DRAFT
     )
     auto_submitted = models.BooleanField(default=False)
     submitted_at = models.DateTimeField(null=True, blank=True)
