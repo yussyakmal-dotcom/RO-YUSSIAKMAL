@@ -55,4 +55,6 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# V1 Docker serves frontend assets via Django staticfiles in local DEBUG mode.
+# Production deployment will require a static server/reverse proxy.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
