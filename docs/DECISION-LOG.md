@@ -125,3 +125,13 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-013 (✅ implementasi diagnostik):** Perintah `odoo_mo_operation_types` hanya membaca daftar operation types manufaktur yang terkait warehouse Odoo, sebagai dasar konfigurasi mapping eksplisit ke dapur.
 - **O-012 (❓ terbuka):** Bagaimana aturan *default kitchen* untuk daftar pesanan toko ditentukan ketika produk belum mempunyai MO—dipilih admin secara manual atau diturunkan dari referensi MO historis? Penentuan lokasi pada MO sendiri tetap dari Operation Type.
 - **O-013 (❓ terbuka):** Pastikan ID Operation Type 10 dapur dan Packing, terutama operasi perakitan PAKET, sesuai konfigurasi Odoo tenant sebelum middleware membuat Draft MO.
+
+## Keputusan terbaru — Template pemesanan manual per dapur (2026-11-05)
+- **D-045 (✅):** Pengguna menetapkan *mapping/daftar SKU yang boleh dipesan* dikelola **manual**, misalnya SKU Dapur Pastry diupload lewat Excel dan dirawat di middleware. Ini menggantikan asumsi initial assignment otomatis via Product Category.
+- **D-046 (✅):** Setiap SKU pada template dapur memiliki flag **Aktif/Nonaktif**; SKU nonaktif tidak ditampilkan di formulir toko.
+- **D-047 (✅):** Saat Admin Toko memilih dapur, middleware otomatis memuat template dapur sebagai daftar **ID/SKU, nama, Qty**. Admin Toko hanya mengisi Qty, tidak memilih/memasukkan SKU satu per satu.
+- **D-048 (✅):** Product Category Odoo bukan penentu dapur. Penentuan operasi saat membuat MO tetap memakai **Operation Type** Odoo seperti D-043. Katalog pemesanan dan routing MO adalah dua konsep berbeda.
+- **I-014 (pilihan implementasi V1):** Tidak menambah tabel template header. `ProductionAssignment` yang sudah ada digunakan sebagai satu penugasan SKU→dapur, dengan `is_active` dan `sort_order` (migration 0002). Daftar template untuk satu dapur dapat dibaca langsung dari assignment aktif.
+- **I-015 (implementasi awal):** Django Admin mendukung unduh format Excel, preview upload, impor Excel, edit mapping/manual, dan API read-only daftar SKU untuk frontend. Toko Draft/Kirim dan React UI belum dibangun.
+- **I-016 (aturan impor aman):** Tidak menimpa master Odoo, tidak menghapus SKU yang absen dari Excel berikutnya, melarang assignment lintas dapur secara diam-diam, dan mencatat audit perubahan.
+- Referensi: [Template Pemesanan per Dapur](./TEMPLATE-PEMESANAN.md).
