@@ -54,7 +54,7 @@ Jumlah: **19 warehouse**, yaitu 1 Central, 10 dapur produksi, 1 Packing, 7 toko.
 SKU umumnya memiliki satu dapur aktif untuk kebutuhan perencanaan, tetapi **MO yang dibuat harus menggunakan Operation Type manufaktur milik dapur tujuan**. Operation Type pada MO adalah penentu operasional di Odoo; kategori produk hanya grouping. SKU dapat dipindah dapur sesuai SOP; middleware tidak mengatur bentrok proses fisik. Simpan dapur snapshot saat rencana/MO dibuat. Odoo sudah dikonfigurasi agar BoM tidak memicu BoM/MO lain.
 
 ## 4. Alur permintaan toko
-- Toko memilih **tanggal pesan, tanggal kirim, jadwal kirim**. Sistem memetakan jadwal kirim ke jadwal produksi.
+- Toko memilih **tanggal pesan, tanggal kirim, jadwal kirim**. **Tanggal produksi dipilih manual oleh Admin Produksi saat konsolidasi**; aturan pemetaan **jadwal produksi** dari jadwal kirim masih perlu diputuskan.
 - Input dilakukan **per toko × dapur × tanggal/jadwal kirim**; satu dapur bisa punya 50–700 SKU. Katalog sudah disiapkan, pengguna cukup isi Qty.
 - Status **Draft**: Qty dapat diedit. Status **Kirim**: Qty terkunci untuk Admin Toko; hanya status Kirim masuk konsolidasi.
 - Submit manual atau auto-submit pada **07.00 WIB, H-2** terhadap tanggal kirim. H-2 adalah 2 hari kalender.
@@ -66,10 +66,10 @@ Tanggal **pesan**, **produksi**, dan **kirim** tetap terpisah. Terdapat tiga jad
 1. Kirim **subuh** → produksi sekitar 20.00 malam sebelumnya sampai subuh.
 2. Kirim **pagi sekitar 08.00** → produksi subuh sampai 08.00.
 3. Kirim **siang** → produksi 08.00–10.00.
-SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tanggal, **bukan scheduler kegiatan dapur**. Tanggal administratif produksi lintas tengah malam belum dikonfirmasi.
+SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tanggal, **bukan scheduler kegiatan dapur**. **Tanggal produksi dipilih manual oleh Admin Produksi**, bukan dihitung dari tanggal kirim. Ketentuan batas tanggal produksi, produksi lintas tengah malam, dan pemetaan jadwal produksi masih terbuka.
 
 ## 6. Konsolidasi MO produk jadi
-- Konsolidasi lintas tujuh toko berdasarkan **SKU × dapur produksi × tanggal produksi × jadwal produksi** (dan terikat jadwal/tanggal kirim terkait).
+- Untuk tahap awal, calon konsolidasi berasal dari StoreOrder **KIRIM** dengan lingkup **dapur × tanggal kirim × jadwal kirim**; lalu **Admin Produksi menentukan tanggal produksi secara manual**. Qty Requested ditotal per SKU+UoM, dengan sumber tiap toko tetap tersimpan. Apakah satu lingkup dapat dibagi ke lebih dari satu tanggal produksi dan bagaimana jadwal produksi dipetakan masih terbuka; lihat kontrak khusus.
 - Simpan terpisah: `qty_requested` (asli agregat toko), `qty_planned` (dapat direvisi Admin Produksi), `qty_mo` (kelipatan BoM).
 - Kuantitas target: `qty_mo = ceil(qty_planned / bom_output_qty) * bom_output_qty` untuk qty_planned > 0.
 - **qty_mo ≤ kapasitas SKU per jadwal**. SOP telah menetapkan kapasitas dengan pertimbangan kelipatan batch; middleware tetap validasi. Perlakuan saat tidak muat masih perlu aturan final, jangan diam-diam memotong atau memindahkan jadwal.
@@ -119,7 +119,7 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 
 ## 12. Hal terbuka — jangan diasumsikan sudah disepakati
 - Aturan saat permintaan melebihi kapasitas efektif setelah pembulatan.
-- Finalisasi tanggal administratif produksi saat melewati tengah malam.
+- Kebijakan validasi **tanggal produksi pilihan manual** (batas terhadap tanggal kirim, lintas tengah malam), pemetaan jadwal produksi, dan apakah satu lingkup pengiriman boleh dipecah ke lebih dari satu tanggal produksi.
 - Apakah kebutuhan komponen PAKET ikut agregat demand produksi dapur atau informasi saja.
 - Ketentuan DO toko: status Draft atau langsung Confirm, beserta transfer dapur→Packing.
 - Urutan referensi source document untuk transfer dua warehouse: kode warehouse asal atau tujuan (usulan asal).
@@ -183,3 +183,11 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Rincian per tanggal kirim, dapur, dan jadwal dapat dibuka dari baris antrean (bukan syarat awal agar pesanan terlihat). Rekap dapat menghitung kedua status sekali per order.
 - Status `PROSES_PRODUKSI` disiapkan pada DB dan API, tetapi **belum dapat ditransisikan melalui frontend** hingga fitur konsolidasi ProductionPlan dibangun. Tidak ada write ke Odoo.
 - Referensi implementasi [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Keputusan tanggal produksi manual dan kontrak konsolidasi (2026-11-06)
+- **DISEPAKATI:** Tanggal produksi **ditentukan manual oleh Admin Produksi saat konsolidasi**, tidak otomatis H-1, H-2 atau sama dengan tanggal kirim. Field wajib dipilih operator sebelum simpan.
+- Status tetap `KIRIM → PROSES_PRODUKSI` **hanya setelah rencana konsolidasi lokal tersimpan atomik** beserta rincian SKU dan relasi pesanan sumber. Lihat rekap/pratinjau tidak mengubah status.
+- **USULAN**, belum disahkan: satu lingkup dapur × tanggal kirim × jadwal kirim → satu rencana dengan tanggal produksi manual; Qty Planned integer per SKU, source snapshot, kunci baris pesanan, anti-duplikasi.
+- **TERBUKA:** boleh tidaknya satu lingkup dipecah ke lebih dari satu tanggal produksi, revisi rencana, pesanan terlambat, aturan Qty Planned=0/default, pemetaan jadwal produksi dan batas validasi tanggal.
+- **Belum diimplementasikan:** penyimpanan ProductionPlan, relasi ke StoreOrder, perpindahan status oleh konsolidasi, dan MO Odoo.
+- Kontrak rincinya ada pada [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md). Dokumentasi ini menjadi referensi sebelum implementasi; usulan bukan persetujuan otomatis.
