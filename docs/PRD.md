@@ -153,3 +153,9 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Pilih Toko, Dapur (template manual), Tanggal Kirim (nilai awal H+2 WIB), Jadwal Kirim; tampilkan SKU/ID + Nama Produk + Qty.
 - Sediakan pencarian, filter Qty ≥1, input keyboard Enter/Tab, Simpan Draft/edit ulang, Kirim terkunci. Dapurnya dapat menampilkan ratusan SKU (praktis sampai 700) tanpa form pilih produk satu per satu.
 - V1 ini mengakses API middleware saja, tidak membuat MO atau transfer Odoo; auto-submit H-2 pukul 07.00 WIB tetap perlu milestone lanjutan.
+
+## Addendum — Qty Admin Toko wajib integer (2026-11-05)
+- **Qty pada formulir pemesanan toko hanya bilangan bulat nonnegatif**: `0, 1, 2, 3, ...`. Tidak boleh desimal (termasuk `1.5`).
+- **Simpan Draft** tetap bisa diedit; Qty 0 diperbolehkan. **Kirim** hanya menyertakan baris Qty ≥1, seluruh bilangan bulat. Jika semuanya 0 → `NO_ORDER`.
+- Validasi dilakukan di **frontend dan backend**; API menolak nilai desimal dari klien lain. Draft historis yang sudah terlanjur berisi Qty desimal harus diperbaiki oleh operator sebelum Kirim, **tanpa pembulatan otomatis**.
+- Batas ini berlaku pada **input Qty pesanan toko**, bukan jumlah bahan baku/BoM atau UoM lain di Odoo. Tidak perlu migration PostgreSQL untuk perubahan input ini.
