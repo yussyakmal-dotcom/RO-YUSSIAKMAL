@@ -56,13 +56,15 @@ Setiap baris SKU dalam workspace perencanaan **wajib** memperlihatkan **secara b
 | SKU | Qty Pesan | Kapasitas | Qty Produksi |
 |---|---:|---:|---:|
 | Produk A | 500 Pcs | 600 Pcs | 500 Pcs |
-| Produk B | 500 Pcs | 400 Pcs | Belum ditetapkan |
+| Produk B | 500 Pcs | 400 Pcs | **400 Pcs — boleh disimpan, kekurangan 100 Pcs** |
 
-- Bila Qty Pesan **lebih besar daripada kapasitas**, tampilkan **peringatan kapasitas/selisih**. Jangan otomatis memindahkan 100 Pcs ke jadwal kirim lain.
+- **DISEPAKATI (2026-11-06):** Bila Qty Pesan **500 Pcs**, kapasitas tersedia **400 Pcs**, dan Admin Produksi menetapkan **Qty Produksi 400 Pcs**, **rencana konsolidasi boleh disimpan**. Catat **kekurangan permintaan 100 Pcs** secara eksplisit; jangan memaksa Qty Produksi = Qty Pesan dan jangan memindahkan 100 Pcs ke jadwal kirim lain. Status pekerjaan perencanaan tidak boleh ditafsirkan sebagai pemenuhan 500 Pcs.
 - Bila kapasitas belum diatur di master, tampilkan **`Kapasitas belum diatur`**, bukan **0** atau **tidak terbatas**.
 - Data `ProductCapacity` saat ini unik untuk **SKU × Schedule** tanpa kolom tanggal/dapur. Jadwal pada kapasitas **harus ditafsirkan sebagai jadwal produksi** dalam fitur ini, bukan jadwal kirim. Perlu validasi konfigurasi jadwal production di tenant sebelum dipakai untuk menghitung keputusan.
 - **USULAN keselamatan:** bila beberapa rencana memakai SKU yang sama pada **tanggal + jadwal produksi** sama, tampilkan juga **kapasitas yang sudah terpakai di rencana lain / kapasitas tersisa**. Jangan menjanjikan kapasitas penuh kepada dua rencana yang berbeda pada slot produksi yang sama.
-- **TERBUKA:** apakah Qty Produksi boleh lebih rendah dari Qty Pesan dan bagaimana mengelola kekurangan; apakah boleh 0; peraturan approval bila selisih terjadi; apakah kebijakan kapasitas berlaku ke Qty Planned atau baru `qty_mo` hasil pembulatan BoM. PRD saat ini menetapkan `qty_mo <= capacity`; implementasi harus tetap memeriksa batas setelah pembulatan BoM pada tahap MO.
+- **DISEPAKATI:** Qty Produksi **boleh lebih rendah daripada Qty Pesan akibat keterbatasan kapasitas**, dan penyimpanan konsolidasi **tidak boleh ditolak hanya karena ada kekurangan** selama seluruh validasi lainnya terpenuhi. Selisih wajib tersimpan pada rincian rencana dan terlihat di UI/histori.
+- **Perhitungan terpisah:** `qty_shortfall = max(0, qty_requested - qty_planned)` menunjukkan kebutuhan pesanan **yang belum tercakup rencana**, sedangkan `capacity_gap = max(0, qty_requested - capacity_available)` menunjukkan kebutuhan yang **melampaui kapasitas tersedia**. Keduanya tidak selalu sama (mis. diminta 500, kapasitas 400, direncanakan 350 → shortfall 150 dan capacity gap 100).
+- **TERBUKA:** apakah Qty Planned boleh **0** atau lebih besar daripada Qty Pesan, siapa menyetujui kekurangan, bagaimana kekurangan dialokasikan ke toko saat distribusi, status tindak lanjut kekurangan, serta apakah Qty Planned melebihi kapasitas dapat disimpan. **Jangan otomatis mengizinkan Qty Planned > kapasitas** dari keputusan ini. PRD tetap menetapkan `qty_mo <= kapasitas`; pembuatan MO di tahap berikutnya wajib menguji ulang hasil pembulatan BoM dan tidak otomatis lolos hanya karena konsolidasi sudah disimpan.
 - **Belum termasuk** otomatisasi pembagian Qty ke slot produksi lain; aturan tersebut tidak boleh diimplikasikan dari adanya dua field jadwal.
 
 ## 4. Ruang lingkup konsolidasi dan status
@@ -88,7 +90,7 @@ Setiap baris SKU dalam workspace perencanaan **wajib** memperlihatkan **secara b
 2. Tindakan terpisah **Rencanakan/Konsolidasi Produksi** membuka workspace yang menampilkan **tanggal kirim + jadwal kirim** secara read-only dan field **tanggal produksi + jadwal produksi** secara eksplisit.
 3. Tabel SKU memuat **Qty Pesan | Qty Kapasitas Produksi | Qty Produksi**, beserta UoM, kapasitas terpakai/tersisa bila relevan, dan peringatan selisih.
 4. **Pratinjau** tetap read-only terhadap database; perubahan Qty Produksi dalam formulir lokal belum mengubah order, status atau Odoo.
-5. **Simpan Konsolidasi** (fitur berikutnya) baru boleh aktif sesudah validasi lengkap dan aturan penanganan kapasitas ditetapkan.
+5. **Simpan Konsolidasi** (fitur berikutnya) harus mengizinkan Qty Produksi di bawah Qty Pesan ketika kapasitas tidak cukup, **menyimpan Qty Pesan/Produksi/Kapasitas dan kekurangannya**, serta mempertahankan jadwal kirim toko. Ketentuan lain yang belum diputuskan tetap divalidasi secara konservatif.
 
 ## 7. Transaksi, anti-duplikasi dan audit
 
@@ -109,7 +111,7 @@ Persyaratan implementasi saat simpan:
 3. Satu SKU bisa terdaftar pada **dua jadwal produksi di tanggal produksi sama** ketika sumber permintaan memang terpisah, tanpa menimpa rencana lainnya.
 4. Order **500 Pcs SUBUH** tidak berubah otomatis menjadi 250 SUBUH + 250 PAGI, atau dipindahkan jadwal kirim akibat kapasitas.
 5. Per SKU menampilkan **Qty Pesan, Qty Kapasitas Produksi, Qty Produksi**; master kapasitas yang belum ada tidak direkayasa menjadi nol/tidak terbatas.
-6. Bila Qty Pesan 500 dan kapasitas 400, sistem menunjukkan kekurangan secara eksplisit, tanpa memecah atau mengalihkan jadwal kirim.
+6. Bila Qty Pesan 500 Pcs dan kapasitas tersedia 400 Pcs, Admin Produksi dapat menyimpan Qty Produksi 400 Pcs dengan **Qty Kekurangan 100 Pcs tersimpan dan terlihat** dalam form/histori; 500 Pcs beserta jadwal kirim toko tetap tidak berubah.
 7. Qty terformat integer per UoM dan sumber toko terlacak; tidak ada Qty pecahan diteruskan untuk produksi.
 8. Relasi sumber tidak memungkinkan konsolidasi ganda walau dua operator mengirim pada waktu sama.
 9. Bila simpan berhasil, baru sumber terkait berubah menjadi PROSES_PRODUKSI; simpan gagal tidak meninggalkan rencana/status parsial.
@@ -119,9 +121,22 @@ Persyaratan implementasi saat simpan:
 ## 9. Keputusan terbuka sebelum coding **penyimpanan**
 
 - **Q-1:** Apakah satu *kelompok permintaan pengiriman yang sama* boleh sengaja diproduksi dalam beberapa jadwal produksi dengan alokasi eksplisit, atau selalu satu jadwal produksi per kelompok SKU? **Tidak boleh memecah jadwal pengiriman** dalam kedua pilihan.
-- **Q-2:** Aturan ketika `Qty Pesan > Kapasitas` atau `Qty Produksi > Kapasitas`: blokir simpan atau simpan rencana dengan catatan kekurangan/approval?
+- **Q-2 (SEBAGIAN TERJAWAB):** **DISEPAKATI** simpan Qty Produksi 400 Pcs saat Qty Pesan 500 Pcs dan kapasitas tersedia 400 Pcs; kekurangan 100 Pcs harus tercatat. **TERBUKA** aturan untuk Qty Produksi **melebihi kapasitas**, kapasitas tidak terkonfigurasi, approval selisih, dan mekanisme tindak lanjut kekurangan.
 - **Q-3:** Apakah Qty Produksi awal diisi sama dengan Qty Pesan atau kosong, bolehkah nol/lebih tinggi/lebih rendah, dan penanganan selisih?
 - **Q-4:** Jadwal produksi mana yang valid di master `Schedule`, apakah perlu tabel khusus jadwal produksi, serta sumber aturan kapasitas jika SKU/dapur/shift sama dipakai beberapa rencana.
 - **Q-5:** Aturan pesanan terlambat, revisi/pembatalan, serta batas tanggal produksi relatif terhadap tanggal kirim.
 
 **Gerbang implementasi:** keputusan yang sudah eksplisit dalam dokumen ini harus mengikat, tetapi item **TERBUKA** tidak boleh dijawab dengan asumsi tersembunyi. Perubahan skema dan aksi penyimpanan akan dibuat pada PR terpisah, dengan migrasi aman atas data yang ada dan validasi bersama operator.
+
+## 10. Keputusan terbaru: rencana dengan kekurangan kapasitas boleh disimpan (2026-11-06)
+
+**DISEPAKATI:** Tiga angka wajib tampil bersamaan: **Qty Pesan 500 Pcs**, **Kapasitas Produksi 400 Pcs**, **Qty Produksi 400 Pcs**. Sistem menyimpan rencana meskipun kebutuhan 100 Pcs **belum tercakup**, dan menyimpan `qty_shortfall=100` yang tetap terlihat dalam histori, peringatan, dan rencana.
+
+- **Qty Pesan / jadwal kirim** tetap milik Admin Toko dan **tidak berubah**.
+- **Qty Produksi** adalah keputusan Admin Produksi, bukan janji bahwa semua pesanan toko telah terpenuhi.
+- **Kekurangan** harus dapat ditelusuri ke lingkup kirim dan SKU/UoM yang sama. Belum boleh dianggap sebagai pembatalan pesanan, perubahan jadwal kirim, atau tambahan MO otomatis.
+- **Status `PROSES_PRODUKSI`** jika nantinya diaktifkan berarti pesanan **telah masuk proses perencanaan**, **bukan** seluruh permintaan telah diproduksi/dipenuhi. Detail Qty kekurangan harus tetap terlihat.
+- Perhitungan tidak boleh mencampur UoM, tidak boleh menghasilkan desimal operasional, dan tidak boleh membuat alokasi per toko secara asumtif. **TERBUKA:** bagaimana 100 Pcs kekurangan dialokasikan per toko / diproses pada tahap Packing dan apakah perlu status penyelesaian khusus.
+- Pengujian implementasi wajib memastikan save berhasil untuk 500/400/400, snapshot Qty dan shortage bertahan setelah reload, status sumber tidak berubah sebelum transaksi berhasil, dan jadwal pengiriman tetap SUBUH.
+
+**Batas saat ini:** dokumen ini **bukan** implementasi form/API simpan konsolidasi. Tahap tersebut tetap memerlukan migrasi aman pemisahan jadwal produksi, relasi sumber, validasi kapasitas efektif, dan pengujian transaksi.
