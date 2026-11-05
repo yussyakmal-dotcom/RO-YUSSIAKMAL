@@ -97,3 +97,10 @@
 - **I-004 (prinsip):** Tetap satu monolith Django dan PostgreSQL; tambah worker/Redis hanya saat pekerjaan integrasi/jadwal diimplementasikan. Tidak membuat stok atau ERP kedua.
 
 Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migrations/0001_initial.py).
+
+## Implementasi berikutnya — Odoo connector read-only
+- **I-005 (✅ implementasi kode):** Dibuat client JSON-2 yang hanya mengizinkan `search_read` pada lima model master Odoo, perintah `odoo_probe` dan `odoo_sync_master` dengan preview default.
+- **I-006 (✅ prinsip keamanan):** Opsi `--apply` hanya memperbarui PostgreSQL middleware setelah semua data Odoo selesai dibaca; tidak melakukan write ke Odoo, tidak menyentuh `ProductionAssignment` dan tidak menebak warehouse/location yang tidak cocok.
+- **I-007 (❓ tenant validation):** Model/field API di Odoo 19 sebenarnya, tipe BoM Paket, dan sumber awal mapping SKU→dapur tetap harus diverifikasi menggunakan /doc Odoo serta akses bot read-only.
+- **I-008 (🚧 status):** Pengujian unit CI memakai data tiruan; koneksi tenant Odoo belum dilakukan dan membutuhkan pengaturan rahasia hanya di .env server lokal.
+- Petunjuk: [Odoo Connector](./ODOO-CONNECTOR.md).
