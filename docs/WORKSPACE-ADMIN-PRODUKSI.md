@@ -19,7 +19,7 @@ Buka `http://localhost:900/produksi/` dan login memakai superuser/ADMIN atau Gro
 - Tabel menampilkan Order ID, toko, tanggal kirim, dapur, jadwal kirim, jumlah SKU, total Qty, dan status.
 - Kirim ditampilkan lebih dahulu; pagination **50 pesanan per halaman**, tombol Sebelumnya/Berikutnya. Jadi daftar tidak diam-diam dipotong ke 30 pesanan terbaru.
 - Klik **Lihat rekap** untuk membuka **modal di atas antrean** (bukan panel panjang di bawah tabel atau pindah halaman). Rekap menunjukkan total per SKU pada lingkup tanggal kirim/dapur/jadwal pesanan, termasuk asal toko dan statusnya. Daftar dan filter di belakang modal tidak berubah; tekan **Tutup Rekap**, ikon ×, **Esc**, atau klik area luar modal untuk kembali. Fokus keyboard kembali ke tombol `Lihat rekap` yang tadi dipilih.
-- Halaman ini **belum membuat ProductionPlan, MO, atau transfer**; tanggal produksi masih memerlukan keputusan SOP.
+- Halaman ini **belum membuat ProductionPlan, MO, atau transfer**. **Tanggal produksi sudah diputuskan diisi manual oleh Admin Produksi saat konsolidasi**; form dan penyimpanan konsolidasi belum tersedia.
 
 ## API
 
@@ -46,7 +46,7 @@ Pesanan yang telah diverifikasi:
 | 1 | T_BAN | JP | 2026-11-07 | SUBUH | KIRIM | 1232 |
 | 2 | T_KD | JP | 2026-11-07 | SUBUH | KIRIM | 413 |
 
-Jumlah dua pesanan **1645 unit**, tetapi jumlah SKU unik dihitung dari detail SKU, bukan dari jumlah baris masing-masing toko. Setelah deployment, kedua order harus muncul di tab **Semua** dan **Kirim**, tanpa memilih tanggal.
+Jumlah angka Qty kedua pesanan secara aritmetis adalah 1645, **tetapi itu bukan total dalam satu satuan yang boleh digunakan untuk produksi jika SKU mempunyai UoM berbeda**. Gunakan subtotal berdasarkan UoM/SKU dalam rekap. Jumlah SKU unik dihitung dari detail SKU, bukan jumlah baris masing-masing toko. Setelah deployment, kedua order harus muncul di tab **Semua** dan **Kirim**, tanpa memilih tanggal.
 
 ```bash
 cd ~/RO-YUSSIAKMAL
@@ -62,7 +62,7 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 
 - Admin Toko masih bisa mengedit hanya saat status `DRAFT`. Setelah `KIRIM` atau `PROSES_PRODUKSI`, pengeditan dilarang.
 - Membuka antrean/rekap tidak mengubah status, Qty atau Odoo.
-- Ketika fitur konsolidasi yang menulis ProductionPlan dibangun, status menjadi `PROSES_PRODUKSI` **hanya setelah konsolidasi berhasil disimpan secara atomik**. Hindari tombol yang cuma mengganti status tanpa membuat hasil konsolidasi.
+- Ketika fitur konsolidasi yang menulis ProductionPlan dibangun, **Admin Produksi wajib memilih tanggal produksi secara manual**, lalu status menjadi `PROSES_PRODUKSI` **hanya setelah konsolidasi berhasil disimpan secara atomik**. Hindari tombol yang cuma mengganti status tanpa membuat hasil konsolidasi.
 - Auto-submit H-2 menghasilkan `KIRIM`; tidak otomatis memindahkan pesanan ke PROSES PRODUKSI.
 - Aturan pesanan terlambat setelah cutoff H-2 07.00 WIB masih menjadi keputusan terpisah.
 
@@ -77,8 +77,8 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 - Nilai kuantitas dari PostgreSQL bisa berbentuk `1232.0000` karena tipe `Decimal(18,4)`, walaupun pesanan toko **selalu integer**. Tampilan Admin Produksi sekarang memformatnya menjadi **1.232**, bukan `1232.0000`. Baris `120.0000` menjadi **120**. Tidak ada pembulatan otomatis untuk anomali pecahan historis.
 - **UoM per SKU dibaca dari master produk middleware `Product.uom`, yang sudah disinkronkan read-only dari Odoo `product.product.uom_id`.** Jika UoM master kosong, tampilkan label sementara **pcs**.
 - Di modal rekap, setiap SKU dan rincian permintaan toko menampilkan Qty dan **satuan produk yang sama**. Contoh `120 Lusin` bila master menyebut Lusin; `120 pcs` bila master kosong.
-- Total Qty pada daftar pesanan hanya diberi satuan tunggal bila seluruh SKU punya UoM yang sama. Jika satu pesanan berisi campuran UoM berbeda, UI menampilkan **beragam UoM** agar tidak mengasumsikan semuanya pcs.
-- Perbaikan ini **tidak menambahkan migrasi**, tidak mengubah data pesanan, template, master Odoo, atau status. API menormalkan Qty integral ke string integer; Qty pecahan lama tetap terlihat dan rekap per SKU tetap memvalidasi integritas.
+- Total Qty pada daftar pesanan hanya diberi satuan tunggal bila seluruh SKU punya UoM yang sama. Jika satu pesanan memiliki campuran UoM, UI menampilkan **subtotal terpisah untuk setiap UoM**, bukan satu angka gabungan.
+- Perbaikan ini **tidak menambahkan migrasi**, tidak mengubah data pesanan, template, master Odoo, atau status. API menormalkan Qty integral ke string integer; Qty pecahan historis tidak ditampilkan sebagai angka operasional, melainkan ditandai **Perlu koreksi Qty**, dan rekap per SKU tetap memvalidasi integritas.
 - Verifikasi UoM asli SKU tertentu pada database Debian (read-only):
   ```bash
   docker compose exec api python manage.py shell -c "from ro_core.models import Product; print(list(Product.objects.filter(sku='10005').values('sku','name','uom')))"
@@ -90,3 +90,11 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 - Produk yang menggunakan UoM sama tetap dapat dijumlahkan; setiap baris SKU memakai UoM asli dari `Product.uom` bila ada, fallback `pcs` bila kosong.
 - UoM per baris pesanan belum tersedia: `StoreOrderLine` sekarang punya satu Qty per SKU dan unitnya mengikuti master Produk. Multi-UoM untuk **satu SKU** dengan baris `1 Kg` dan `500 gram` memerlukan keputusan dan perubahan skema lanjutan. Ini **belum** diimplementasikan. Jangan menyimpulkan adanya konversi otomatis.
 - Perubahan ini hanya pemeriksaan dan penyajian API/React, tanpa migrasi atau mutasi data/Odoo. `qty_total=null` menandakan total tidak aman untuk dinyatakan sebagai satu angka; baca `qty_by_uom` dan `qty_invalid`.
+
+## Kontrak bisnis konsolidasi berikutnya (belum diimplementasikan)
+
+Keputusan sudah pasti: **tanggal produksi dipilih manual oleh Admin Produksi**, bukan default H-1/H-2. Untuk pesanan `JP / SUBUH / kirim 2026-11-07`, operator harus mengisi tanggal produksi sebelum menyimpan.
+
+Lihat [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md) untuk urutan operator, kontrak Qty Requested / Qty Planned, constraint sumber StoreOrder, audit, status atomik dan acceptance criteria.
+
+**Penting:** dokumen ini **tidak** berarti tombol konsolidasi sekarang tersedia. Kebijakan apakah satu lingkup boleh diproduksi di beberapa tanggal, Qty Planned = 0, order terlambat, dan jadwal produksi masih perlu keputusan sebelum implementasi penyimpanan.
