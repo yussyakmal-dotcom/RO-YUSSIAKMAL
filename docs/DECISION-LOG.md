@@ -156,3 +156,12 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-024 (implementasi):** Frontend memakai input numerik digit saja, API Django memvalidasi integer nonnegatif. Draft tetap editable, dan Kirim hanya mengambil Qty ≥1.
 - **I-025 (kompatibilitas):** Kolom Qty PostgreSQL masih Decimal(18,4) supaya tidak perlu migration berisiko; integritas bilangan bulat dijaga API. Draft historis yang punya pecahan diblokir saat Kirim sampai pengguna memperbaikinya.
 - **Koreksi D-050:** Frasa Qty di bawah 1 dikeluarkan tetap berlaku untuk nol; **Qty pecahan kini tidak valid sejak tahap input**, bukan diizinkan lalu disaring saat Kirim.
+
+## Implementasi auto-submit H-2 pukul 07.00 WIB (2026-11-05)
+- **I-026 (✅ backend):** Perintah `auto_submit_store_orders` default preview, `--apply` baru bisa dipakai pada/pasca 07 WIB. Target tepat `delivery_date = tanggal_bisnis_WIB + 2 hari`; hanya Draft yang sudah ada.
+- **I-027 (✅ integritas):** Qty integer ≥1 menjadi KIRIM, Draft kosong/Qty 0 menjadi NO_ORDER. Proses transaksi/row lock per order, audit `AUTO_KIRIM`/`AUTO_NO_ORDER`, `auto_submitted=true`; re-run aman dan tidak mengubah manual KIRIM.
+- **I-028 (✅ deployment template):** Contoh `systemd` timer Debian pukul 07 WIB menggunakan `docker compose exec -T`. **Belum diaktifkan pada server pengguna**; perlu verifikasi preview sebelum operator meng-enable. Tidak menambah Celery/Redis.
+- **I-029 (✅ kompatibilitas):** Draft historis dengan Qty pecahan/negatif tidak dikirim atau dibulatkan; ID dilaporkan dan unit mendapat status error untuk tindak lanjut operator. UI menandai KIRIM otomatis.
+- **O-014 (❓ terbuka):** Kebijakan input/edit Draft **setelah** batas waktu 07 H-2 belum disepakati; versi ini tidak menolak late Draft dan tidak menjalankan ulang tiap menit. Harus diputuskan sebelum pemakaian tanpa pengawasan.
+- **O-015 (❓ terbuka):** Prosedur backlog saat downtime di jam cutoff. Timer awal memilih `Persistent=false` agar tidak otomatis finalisasi data pengujian pada saat aktivasi malam hari.
+- Panduan: [Auto-submit H-2](./AUTO-SUBMIT-H-2.md).
