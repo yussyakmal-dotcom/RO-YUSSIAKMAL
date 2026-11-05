@@ -216,3 +216,68 @@ class ProductionDemandTests(TestCase):
             "store_code": "T_BAN", "kitchen_code": "JP",
             "schedule_code": "SUBUH", "delivery_date": "2026-11-08",
         }).status_code, 403)
+
+    def test_recent_kirim_orders_find_correct_filter_outside_current_scope(self):
+        from django.utils import timezone
+
+        sent_bandara = self.create_order(
+            self.store_a, "KIRIM", [(self.risoles, 25)],
+            delivery_date="2026-11-07", schedule=self.pagi,
+        )
+        sent_kedaton = self.create_order(
+            self.store_b, "KIRIM", [(self.risoles, 40)],
+            delivery_date="2026-11-08", schedule=self.subuh,
+            auto_submitted=True,
+        )
+        self.create_order(self.store_c, "DRAFT", [(self.risoles, 900)])
+        sent_bandara.submitted_at = timezone.now()
+        sent_bandara.save(update_fields=["submitted_at"])
+        sent_kedaton.submitted_at = timezone.now()
+        sent_kedaton.save(update_fields=["submitted_at"])
+
+        self.client.force_login(self.production_user)
+        recent = self.client.get(reverse("production-recent-orders"))
+        self.assertEqual(recent.status_code, 200, recent.content)
+        data = recent.json()
+        self.assertEqual(data["limit"], 30)
+        self.assertEqual(len(data["items"]), 2)
+        mapped = {item["store_code"]: item for item in data["items"]}
+        self.assertEqual(mapped["T_BAN"]["delivery_date"], "2026-11-07")
+        self.assertEqual(mapped["T_BAN"]["kitchen_code"], "JP")
+        self.assertEqual(mapped["T_BAN"]["schedule_code"], "PAGI")
+        self.assertEqual(mapped["T_BAN"]["sku_count"], 1)
+        self.assertEqual(Decimal(mapped["T_BAN"]["qty_total"]), Decimal("25"))
+        self.assertEqual(mapped["T_KD"]["delivery_date"], "2026-11-08")
+        self.assertTrue(mapped["T_KD"]["auto_submitted"])
+
+        # Default H+2/SUBUH for another date does not include Bandara,
+        # but selecting its exact date+slot does.
+        missing = self.request_recap(
+            delivery_date="2026-11-08", schedule_code="PAGI"
+        ).json()
+        self.assertEqual(missing["summary"]["stores_sent"], 0)
+        correct = self.request_recap(
+            delivery_date=mapped["T_BAN"]["delivery_date"],
+            kitchen_code=mapped["T_BAN"]["kitchen_code"],
+            schedule_code=mapped["T_BAN"]["schedule_code"],
+        ).json()
+        self.assertEqual(correct["summary"]["stores_sent"], 1)
+        self.assertEqual(correct["summary"]["qty_total"], "25")
+        self.assertEqual(AuditLog.objects.count(), 0)
+
+    def test_recent_orders_are_limited_and_protected(self):
+        url = reverse("production-recent-orders")
+        self.assertIn(self.client.get(url).status_code, (401, 403))
+        self.client.force_login(self.store_user)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.production_user)
+        self.assertEqual(self.client.post(url, {}, content_type="application/json").status_code, 405)
+        for index in range(34):
+            self.create_order(
+                self.store_a, "KIRIM", [(self.risoles, 1)],
+                delivery_date=f"2026-12-{index+1:02d}" if index < 31 else
+                f"2027-01-{index-30:02d}",
+            )
+        output = self.client.get(url)
+        self.assertEqual(output.status_code, 200, output.content)
+        self.assertEqual(len(output.json()["items"]), 30)
