@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md)
 
 ## Jalankan pengembangan lokal
 
@@ -47,6 +47,21 @@ docker compose exec api python manage.py odoo_mo_operation_types
 ```
 
 Hasilnya menunjukkan ID Operation Type, nama, warehouse dan lokasi default. Setelah diverifikasi, kita dapat menghubungkan dapur/warehouse middleware ke Operation Type Odoo **dengan konfigurasi eksplisit**, bukan menebak lewat kategori. Pemetaan SKU yang sudah ada tidak dimodifikasi oleh pemeriksaan ini. Lihat [panduan](docs/ODOO-CONNECTOR.md#verifikasi-manufacturing-operation-type).
+
+## Template pemesanan per dapur (Excel manual)
+
+Administrator mengatur SKU setiap dapur melalui **Django Admin → Production Assignments**. Klik **Download Format Excel** / **Upload Template Excel** untuk mengelola urutan, status Aktif/Nonaktif, dan penugasan SKU per dapur. Product Category bukan sumber assignment.
+
+```bash
+git pull origin main
+docker compose up -d --build
+docker compose exec api python manage.py migrate --noinput
+curl http://127.0.0.1:900/health/
+```
+
+API daftar SKU aktif (perlu autentikasi): `GET /api/v1/order-templates/PST/`. Mengembalikan `id, sku, name, qty:0`. UI input Qty/Draft/Kirim React belum tersedia pada milestone ini.
+
+Petunjuk dan aturan impor: [Template Pemesanan per Dapur](docs/TEMPLATE-PEMESANAN.md).
 
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 

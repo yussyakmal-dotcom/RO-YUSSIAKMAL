@@ -129,3 +129,12 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Infrastruktur hosting dan kebijakan RPO/RTO backup.
 
 > Dokumen ini baseline requirements, bukan bukti validasi langsung API/model Odoo pada tenant produksi.
+
+## Addendum 2026-11-05 — Template SKU manual per dapur (keputusan terbaru)
+- Admin/Administrator mengelola **daftar SKU yang ditawarkan pada formulir pemesanan** per dapur, menggunakan upload Excel `.xlsx` dan edit manual di middleware. Tidak ada pemilihan dapur otomatis dari Product Category.
+- Template per dapur berlaku sebagai katalog bersama untuk toko-toko; saat Admin Toko memilih dapur, sistem langsung menampilkan daftar `SKU/ID | Nama Produk | Qty` dengan Qty default 0. Pengguna cukup mengisi Qty massal, **tidak menginput SKU satu per satu**.
+- Template memiliki **flag Aktif/Nonaktif per SKU** dan urutan tampil. SKU nonaktif disembunyikan dari formulir pesanan baru, tetapi tidak menghapus histori order maupun master Odoo.
+- `ProductionAssignment` digunakan untuk satu pemetaan SKU→dapur serta template list, sehingga **tidak perlu tabel header template lain** pada V1. Semua perubahan assignment dan aktif template milik middleware.
+- Upload aman: preview sebelum impor; validasi SKU mengacu ke master Odoo; SKU tidak ditemukan, duplikat, atau sudah ditempatkan di dapur lain dilaporkan dan tidak diimport secara parsial; SKU yang absen dari Excel baru tidak dihapus otomatis.
+- **Operation Type Odoo tetap penentu lokasi produksi pada MO.** Template manual hanya menentukan SKU yang muncul untuk pemesanan/perencanaan; ketika membuat MO, middleware harus mengirim Operation Type sesuai dapur.
+- Spesifikasi dan petunjuk: [Template Pemesanan per Dapur](./TEMPLATE-PEMESANAN.md).

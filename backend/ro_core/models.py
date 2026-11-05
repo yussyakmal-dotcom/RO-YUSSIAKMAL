@@ -72,8 +72,15 @@ class Product(models.Model):
 
 
 class ProductionAssignment(models.Model):
+    """One SKU belongs to one kitchen order template, maintained locally.
+
+    is_active is distinct from Product.active in Odoo: inactive assignment
+    stays in middleware but is hidden from future store order forms.
+    """
     product = models.OneToOneField(Product, on_delete=models.PROTECT)
     kitchen = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
 

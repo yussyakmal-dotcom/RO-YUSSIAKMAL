@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<p>Pilih dapur, lalu upload file <strong>.xlsx</strong> dengan kolom <code>SKU</code>, <code>NAMA</code> (opsional), <code>AKTIF</code>, dan <code>URUTAN</code>.</p>
+<p><strong>Preview</strong> hanya membaca. <strong>Impor</strong> hanya menyimpan SKU yang tercantum dalam file; SKU lain tidak akan dihapus atau dinonaktifkan.</p>
+<p><a href="{% url 'admin:ro_core_productionassignment_download_template' %}">Unduh format Excel</a> | <a href="{% url 'admin:ro_core_productionassignment_changelist' %}">Kembali ke daftar template</a></p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div class="submit-row">
+    <button type="submit" name="action" value="preview" class="default">Preview Excel</button>
+    <button type="submit" name="action" value="apply" onclick="return confirm('Yakin impor template SKU ke dapur terpilih? SKU di luar Excel tidak dihapus.');">Impor ke Middleware</button>
+  </div>
+</form>
+{% if preview %}
+  <h2>Hasil Preview — {{ preview.kitchen.name }}</h2>
+  <p><strong>{{ preview.total }}</strong> baris SKU; baru: {{ preview.new_count }}, ubah: {{ preview.update_count }}, tidak berubah: {{ preview.unchanged_count }}.</p>
+  {% if preview.errors %}
+    <div class="errornote">Impor akan ditolak jika kesalahan di bawah belum diperbaiki.</div>
+    <ul>{% for error in preview.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+  {% else %}
+    <p>Validasi lulus. Jika ingin mengimpor, pilih kembali file Excel yang sama kemudian tekan <strong>Impor ke Middleware</strong>.</p>
+  {% endif %}
+  <table>
+    <thead><tr><th>Baris</th><th>SKU</th><th>Nama dari Odoo</th><th>Status Template</th><th>Urutan</th><th>Tindakan</th></tr></thead>
+    <tbody>
+      {% for row in preview.rows|slice:":100" %}
+      <tr><td>{{ row.row_number }}</td><td>{{ row.sku }}</td><td>{{ row.name|default:"(tidak ditemukan)" }}</td><td>{% if row.is_active %}Aktif{% else %}Nonaktif{% endif %}</td><td>{{ row.sort_order }}</td><td>{{ row.action|default:"PERIKSA" }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if preview.total > 100 %}<p>Menampilkan 100 baris pertama dari {{ preview.total }} baris.</p>{% endif %}
+{% endif %}
+{% endblock %}

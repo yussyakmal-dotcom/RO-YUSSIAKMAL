@@ -24,7 +24,7 @@ Peta field berikut adalah *model contract* untuk implementasi. ORM adalah sumber
 |---|---|
 | `Warehouse` | `odoo_id: BigInteger(unique)`, `code: Char(unique)`, `name: Char`, `kind: choices`, `stock_location_odoo_id: BigInteger(null)`, `active: Bool` |
 | `Product` | `odoo_id: BigInteger(unique)`, `sku`, `name`, `category`, `uom`, `bom_odoo_id`, `bom_output_qty: Decimal(null)`, `bom_components: JSONField(default=list)`, `synced_at` |
-| `ProductionAssignment` | `product: OneToOne(Product)`, `kitchen: FK(Warehouse)`, `updated_at` |
+| `ProductionAssignment` | `product: OneToOne(Product)`, `kitchen: FK(Warehouse)`, `is_active: Boolean(default=True)`, `sort_order: PositiveInteger(default=0)`, `updated_at` |
 | `Schedule` | `code: unique`, `name`, `production_label`, `sort_order`, `active` |
 | `ProductCapacity` | `product: FK`, `schedule: FK`, `max_qty: Decimal`; unique pair |
 | `MinStockRule` | `product: FK`, `warehouse: FK`, `min_qty: Decimal`; unique pair |
@@ -87,3 +87,6 @@ allocate_packing(delivery_date, schedule_id, quantities, actor)
 
 ## Yang sengaja belum dipaksakan
 Jangan membangun generic workflow, approval flow, full event sourcing, inventory movement, atau scheduling shift. Status dan model dapat ditambah nanti via migration. Hal terbuka PRD/decision log (DO, Paket demand ke dapur, exact stock quantity) diselesaikan sebelum mengaktifkan fitur terkait.
+
+## Template order manual — V1
+`ProductionAssignment` sekaligus sumber daftar SKU untuk formulir per dapur. File Excel diunggah melalui Django Admin; impor hanya memperbarui penugasan dan status template lokal, tidak menulis ke Odoo. Formulir toko mengambil daftar melalui `GET /api/v1/order-templates/<kode_dapur>/` (read-only dan perlu login). Qty selalu milik `StoreOrderLine`, bukan `ProductionAssignment`. Lihat [panduan template](./TEMPLATE-PEMESANAN.md) dan migration `0002_order_template_flags.py`.
