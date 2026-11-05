@@ -97,4 +97,14 @@ Keputusan sudah pasti: **tanggal produksi dipilih manual oleh Admin Produksi**, 
 
 Lihat [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md) untuk urutan operator, kontrak Qty Requested / Qty Planned, constraint sumber StoreOrder, audit, status atomik dan acceptance criteria.
 
-**Penting:** dokumen ini **tidak** berarti tombol konsolidasi sekarang tersedia. Kebijakan apakah satu lingkup boleh diproduksi di beberapa tanggal, Qty Planned = 0, order terlambat, dan jadwal produksi masih perlu keputusan sebelum implementasi penyimpanan.
+**Penting:** tombol konsolidasi belum tersedia. Jadwal produksi harus berbeda dari jadwal kirim sebagai dimensi data. Form mendatang wajib menampilkan Qty Pesan, Qty Kapasitas Produksi dan Qty Produksi. Larangan memecah jadwal kirim toko tetap berlaku. Detail ada pada Kontrak Konsolidasi Produksi V1.
+
+## Jadwal produksi terpisah dan kapasitas SKU
+
+- **Tanggal produksi** ditetapkan manual oleh Admin Produksi. **Jadwal produksi** merupakan dimensi perencanaan yang berbeda dari **jadwal kirim** yang sudah ditentukan Admin Toko.
+- SKU yang sama boleh diproduksi pada tanggal produksi sama namun dalam jadwal produksi berbeda untuk kelompok permintaan pengiriman yang berbeda.
+- Admin Produksi **tidak boleh** memecah permintaan `500 Pcs` jadwal kirim `SUBUH` menjadi `250 SUBUH + 250 PAGI`, atau mengubah tanggal/jadwal kirim tanpa keputusan Admin Toko.
+- Rancangan form perencanaan **wajib menampilkan** `Qty Pesan (read-only) | Qty Kapasitas Produksi (read-only) | Qty Produksi (input)` per SKU dengan UoM. Kapasitas didapat dari `ProductCapacity.max_qty` untuk **SKU × jadwal produksi** (bukan jadwal kirim), dan harus mempertimbangkan kapasitas yang sudah dipakai rencana lain di tanggal/jadwal produksi yang sama.
+- Bila kapasitas tidak ada, tampilkan **Kapasitas belum diatur**, bukan nol atau tak terbatas. Bila Qty Pesan melebihi kapasitas, tampilkan kekurangan tanpa memindahkan jadwal pengiriman otomatis.
+- **Belum tersedia pada UI/model sekarang:** jadwal produksi sebagai field `ProductionPlan` tersendiri, tabel tiga Qty, aksi Simpan Konsolidasi. Rancangan ini belum menjadi fitur aktif.
+- Kontrak rinci: [Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md).

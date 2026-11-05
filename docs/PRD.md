@@ -61,18 +61,19 @@ SKU umumnya memiliki satu dapur aktif untuk kebutuhan perencanaan, tetapi **MO y
 - Ketika submit, buang baris Qty = 0, simpan baris **Qty ≥ 1**. Bila semuanya nol, catat **No Order** (bukan error); toko bisa libur pada hari tertentu.
 - Status submit per dapur terpisah. Konsolidasi hanya atas permintaan yang sudah Kirim.
 
-## 5. Jadwal dan tiga tanggal
+## 5. Jadwal kirim versus jadwal produksi serta tiga tanggal
 Tanggal **pesan**, **produksi**, dan **kirim** tetap terpisah. Terdapat tiga jadwal standar dan dapat ditambah jika diperlukan:
 1. Kirim **subuh** → produksi sekitar 20.00 malam sebelumnya sampai subuh.
 2. Kirim **pagi sekitar 08.00** → produksi subuh sampai 08.00.
 3. Kirim **siang** → produksi 08.00–10.00.
-SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tanggal, **bukan scheduler kegiatan dapur**. **Tanggal produksi dipilih manual oleh Admin Produksi**, bukan dihitung dari tanggal kirim. Ketentuan batas tanggal produksi, produksi lintas tengah malam, dan pemetaan jadwal produksi masih terbuka.
+SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik dapur**. **Tanggal produksi diisi manual oleh Admin Produksi dan jadwal produksi harus tercatat terpisah dari jadwal kirim.** SKU yang sama dapat diproduksi pada satu tanggal di jadwal produksi berbeda untuk kebutuhan pengiriman yang memang berbeda. Admin Produksi **tidak boleh memecah atau mengubah permintaan 500 Pcs jadwal kirim SUBUH menjadi 250 SUBUH + 250 PAGI**. Batas tanggal, sumber daftar jadwal produksi dan kemungkinan alokasi produksi lintas jadwal untuk permintaan yang sama memerlukan aturan tersendiri.
 
 ## 6. Konsolidasi MO produk jadi
-- Untuk tahap awal, calon konsolidasi berasal dari StoreOrder **KIRIM** dengan lingkup **dapur × tanggal kirim × jadwal kirim**; lalu **Admin Produksi menentukan tanggal produksi secara manual**. Qty Requested ditotal per SKU+UoM, dengan sumber tiap toko tetap tersimpan. Apakah satu lingkup dapat dibagi ke lebih dari satu tanggal produksi dan bagaimana jadwal produksi dipetakan masih terbuka; lihat kontrak khusus.
-- Simpan terpisah: `qty_requested` (asli agregat toko), `qty_planned` (dapat direvisi Admin Produksi), `qty_mo` (kelipatan BoM).
+- Calon konsolidasi berasal dari StoreOrder **KIRIM** dengan lingkup **dapur × tanggal kirim × jadwal kirim** yang tidak boleh diubah oleh Admin Produksi. Rencana memiliki dimensi **tanggal produksi (manual) × jadwal produksi (terpisah)**. SKU yang sama bisa muncul pada tanggal produksi sama dengan jadwal produksi berbeda untuk kelompok pengiriman yang berbeda; Qty sumber tidak boleh dihitung dua kali atau dipecah ke jadwal kirim lain. Kebijakan pembagian *pelaksanaan produksi* lintas shift untuk satu kelompok pengiriman masih perlu keputusan.
+- **Tabel perencanaan wajib menampilkan berdampingan**: **Qty Pesan (`qty_requested`)**, **Qty Kapasitas Produksi (`ProductCapacity.max_qty` untuk SKU × jadwal produksi)**, dan **Qty Produksi (`qty_planned`, keputusan Admin Produksi)**. Seluruh nilai menggunakan UoM yang benar, tanpa angka pecahan yang berpotensi salah dibaca. Qty Pesan asli tidak dapat diedit. Bila kapasitas belum dikonfigurasi, tampilkan **Kapasitas belum diatur**, bukan 0 atau tak terbatas. Perbedaan permintaan vs kapasitas harus terlihat; tidak boleh mengalihkan Qty ke jadwal kirim lain secara otomatis.
+- Simpan terpisah: `qty_requested` (asli agregat toko), `qty_planned` (dapat direvisi Admin Produksi), `capacity_qty` (snapshot kapasitas untuk jadwal produksi), `qty_mo` (kelipatan BoM; tahap berikutnya).
 - Kuantitas target: `qty_mo = ceil(qty_planned / bom_output_qty) * bom_output_qty` untuk qty_planned > 0.
-- **qty_mo ≤ kapasitas SKU per jadwal**. SOP telah menetapkan kapasitas dengan pertimbangan kelipatan batch; middleware tetap validasi. Perlakuan saat tidak muat masih perlu aturan final, jangan diam-diam memotong atau memindahkan jadwal.
+- **qty_mo ≤ kapasitas SKU per jadwal produksi**. SOP telah menetapkan kapasitas dengan pertimbangan kelipatan batch; middleware tetap validasi. Saat kapasitas tidak muat, tampilkan selisih/kekurangan secara eksplisit, **jangan diam-diam memotong atau memindahkan jadwal kirim**. Penanganan selisih ketika simpan, serta kapasitas yang sudah dipakai rencana lain pada slot produksi sama, memerlukan aturan final.
 - Revisi hanya hingga MO dibuat; perubahan Qty rencana mengulang hitung BoM/bahan. Audit otomatis nilai lama/baru, pelaku, timestamp tanpa formulir alasan wajib.
 - Hasil aktual dapat kurang/lebih dari output BoM (rusak, variasi ukuran); tidak boleh memaksa sama dengan target.
 
@@ -119,7 +120,7 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 
 ## 12. Hal terbuka — jangan diasumsikan sudah disepakati
 - Aturan saat permintaan melebihi kapasitas efektif setelah pembulatan.
-- Kebijakan validasi **tanggal produksi pilihan manual** (batas terhadap tanggal kirim, lintas tengah malam), pemetaan jadwal produksi, dan apakah satu lingkup pengiriman boleh dipecah ke lebih dari satu tanggal produksi.
+- Kebijakan validasi **tanggal produksi pilihan manual** (batas terhadap tanggal kirim, lintas tengah malam), sumber jadwal produksi yang valid, dan apakah satu lingkup pengiriman boleh dilaksanakan di lebih dari satu tanggal/jadwal produksi **tanpa mengubah jadwal kirim**.
 - Apakah kebutuhan komponen PAKET ikut agregat demand produksi dapur atau informasi saja.
 - Ketentuan DO toko: status Draft atau langsung Confirm, beserta transfer dapur→Packing.
 - Urutan referensi source document untuk transfer dua warehouse: kode warehouse asal atau tujuan (usulan asal).
@@ -187,7 +188,10 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 ## Keputusan tanggal produksi manual dan kontrak konsolidasi (2026-11-06)
 - **DISEPAKATI:** Tanggal produksi **ditentukan manual oleh Admin Produksi saat konsolidasi**, tidak otomatis H-1, H-2 atau sama dengan tanggal kirim. Field wajib dipilih operator sebelum simpan.
 - Status tetap `KIRIM → PROSES_PRODUKSI` **hanya setelah rencana konsolidasi lokal tersimpan atomik** beserta rincian SKU dan relasi pesanan sumber. Lihat rekap/pratinjau tidak mengubah status.
-- **USULAN**, belum disahkan: satu lingkup dapur × tanggal kirim × jadwal kirim → satu rencana dengan tanggal produksi manual; Qty Planned integer per SKU, source snapshot, kunci baris pesanan, anti-duplikasi.
-- **TERBUKA:** boleh tidaknya satu lingkup dipecah ke lebih dari satu tanggal produksi, revisi rencana, pesanan terlambat, aturan Qty Planned=0/default, pemetaan jadwal produksi dan batas validasi tanggal.
+- **DISEPAKATI:** ProductionPlan harus membedakan **tanggal + jadwal produksi** dari **tanggal + jadwal kirim**. SKU yang sama boleh diproduksi pada tanggal sama dalam jadwal produksi berbeda untuk kebutuhan kirim yang berbeda. Kebutuhan toko **500 Pcs SUBUH** tidak boleh dibagi menjadi **250 SUBUH + 250 PAGI** oleh Admin Produksi.
+- **DISEPAKATI:** Admin Produksi harus melihat **Qty Pesan, Qty Kapasitas Produksi, Qty Produksi** berdampingan per SKU dan UoM sebelum menentukan Qty Produksi.
+- **USULAN**, belum disahkan: satu kelompok pengiriman × SKU → satu alokasi rencana produksi, Qty Planned integer per SKU, relasi sumber dan kunci anti-duplikasi. Keputusan apakah satu komitmen pengiriman boleh dilaksanakan dalam beberapa jadwal produksi masih terbuka, tetapi **tidak boleh mengubah jadwal pengirimannya**.
+- **TERBUKA:** kebijakan alokasi pelaksanaan produksi lintas tanggal/jadwal untuk *komitmen pengiriman yang sama*, revisi, order terlambat, kekurangan kapasitas, aturan Qty Planned=0/default, pengaturan jadwal produksi yang valid dan batas tanggal.
 - **Belum diimplementasikan:** penyimpanan ProductionPlan, relasi ke StoreOrder, perpindahan status oleh konsolidasi, dan MO Odoo.
+- **Keselarasan skema belum selesai:** saat ini ProductionPlan hanya memiliki satu FK `schedule` sehingga migrasi untuk `delivery_schedule` dan `production_schedule` diperlukan. ProductCapacity sudah memiliki `product + schedule + max_qty`, tetapi kapasitas belum ditampilkan di layar perencanaan karena layar simpan belum dibangun.
 - Kontrak rincinya ada pada [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md). Dokumentasi ini menjadi referensi sebelum implementasi; usulan bukan persetujuan otomatis.
