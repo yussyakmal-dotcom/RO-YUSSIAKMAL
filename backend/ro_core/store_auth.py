@@ -20,7 +20,7 @@ def _eligible(user):
         return False
     if user.is_superuser:
         return True
-    return user.groups.filter(name__in=("STORE", "ADMIN")).exists()
+    return user.groups.filter(name__in=("STORE", "ADMIN", "PRODUCTION")).exists()
 
 
 @require_GET
@@ -34,8 +34,10 @@ def csrf_cookie(request):
 @never_cache
 def session_info(request):
     if not _eligible(request.user):
-        return JsonResponse({"detail": "Login sebagai Admin Toko atau Administrator diperlukan."}, status=401)
+        return JsonResponse({"detail": "Login sebagai Admin Toko, Admin Produksi, atau Administrator diperlukan."}, status=401)
     admin = request.user.is_superuser or request.user.groups.filter(name="ADMIN").exists()
+    production = admin or request.user.groups.filter(name="PRODUCTION").exists()
+    store_role = admin or request.user.groups.filter(name="STORE").exists()
     stores = Warehouse.objects.filter(kind="STORE", active=True)
     if not admin:
         stores = stores.filter(userwarehouseaccess__user=request.user).distinct()
@@ -57,6 +59,8 @@ def session_info(request):
             "username": request.user.get_username(),
             "full_name": request.user.get_full_name() or request.user.get_username(),
             "admin": admin,
+            "can_access_production": production,
+            "can_access_store": store_role,
         },
         "stores": list(stores.order_by("name").values("code", "name")),
         "kitchens": list(kitchens.values("code", "name", "item_count")),

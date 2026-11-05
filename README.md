@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md) · [Frontend Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md) · [Auto-submit H-2](docs/AUTO-SUBMIT-H-2.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md) · [Frontend Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md) · [Rekap Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md) · [Auto-submit H-2](docs/AUTO-SUBMIT-H-2.md)
 
 ## Jalankan pengembangan lokal
 
@@ -108,3 +108,14 @@ Setelah preview, sistem dapat dijadwalkan pukul **07:00 WIB** menggunakan templa
 Menu **Store orders** dan **Store order lines** pada `/admin/` adalah halaman **pemeriksaan read-only**. Daftarnya menampilkan toko, dapur, tanggal kirim, jadwal, SKU, nama produk, Qty, serta status pesanan; bukan lagi label `StoreOrderLine object (18)`. Qty integer ditampilkan tanpa `.0000` (misalnya `78`), sedangkan data lama yang benar-benar pecahan diberi tanda perlu koreksi.
 
 **Jangan mengubah pesanan lewat Django Admin.** Draft diubah pada `/toko/`; setelah Kirim atau NO_ORDER datanya terkunci. Kolom PostgreSQL tetap Decimal(18,4) demi kompatibilitas, tetapi UI/API toko tetap menerima Qty integer saja. Tidak ada migration database untuk perbaikan tampilan ini.
+
+## Workspace Admin Produksi — Rekap Kebutuhan (tahap awal)
+
+**http://localhost:900/produksi/** — login superuser/ADMIN atau akun Group **PRODUCTION**. Menampilkan rekap permintaan final **KIRIM** dari seluruh toko per **tanggal kirim × dapur × jadwal kirim × SKU**, termasuk rincian Qty per toko. Draft, NO_ORDER, dan toko yang belum membuat pesanan tidak dihitung; status masing-masing tetap ditampilkan.
+
+API read-only: `GET /api/v1/production/demand/?delivery_date=2026-11-08&kitchen_code=JP&schedule_code=SUBUH` (Session auth + permission Admin Produksi). Belum membuat ProductionPlan/MO dan belum mengubah Odoo. **Tanggal produksi tidak ditebak dari tanggal kirim** sebelum SOP-nya dipastikan. [Panduan rekap](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+```bash
+git pull origin main
+docker compose up -d --build --force-recreate api
+```

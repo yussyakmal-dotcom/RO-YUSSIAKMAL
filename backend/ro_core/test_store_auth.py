@@ -80,7 +80,7 @@ class StoreSessionAuthTests(TestCase):
         self.assertEqual(self.client.post(
             url, wrong, content_type="application/json", HTTP_X_CSRFTOKEN=token
         ).status_code, 401)
-        group = Group.objects.create(name="PRODUCTION")
+        group = Group.objects.create(name="PACKING")
         self.user.groups.clear()
         self.user.groups.add(group)
         self.assertEqual(self.client.post(

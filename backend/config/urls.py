@@ -5,6 +5,7 @@ from django.urls import path
 from ro_core.order_template_api import kitchen_order_template
 from ro_core.store_order_api import store_order_form, send_store_order
 from ro_core.store_auth import csrf_cookie, session_info, login_session, logout_session
+from ro_core.production_demand_api import production_demand
 
 def health(_request):
     return JsonResponse({"status": "ok", "service": "ro-middleware"})
@@ -16,6 +17,8 @@ def store_workspace(request):
 urlpatterns = [
     path("", lambda request: redirect("store-workspace"), name="root"),
     path("toko/", store_workspace, name="store-workspace"),
+    path("produksi/", store_workspace, name="production-workspace"),
+    path("api/v1/production/demand/", production_demand, name="production-demand"),
     path("api/v1/auth/csrf/", csrf_cookie, name="store-session-csrf"),
     path("api/v1/auth/me/", session_info, name="store-session-me"),
     path("api/v1/auth/login/", login_session, name="store-session-login"),
