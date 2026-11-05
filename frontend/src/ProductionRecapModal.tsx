@@ -87,7 +87,12 @@ export default function ProductionRecapModal({
             <>
               <div className="production-recap-summary">
                 <div><span>SKU unik</span><strong>{matchingReport.summary.sku_count}</strong></div>
-                <div><span>Total Qty</span><strong>{productionQtyLabel(matchingReport.summary.qty_total, matchingReport.summary.qty_uom)}</strong></div>
+                <div><span>Total Qty</span><strong>{productionQtyLabel(
+                  matchingReport.summary.qty_total,
+                  matchingReport.summary.qty_uom,
+                  matchingReport.summary.qty_by_uom,
+                  matchingReport.summary.qty_invalid,
+                )}</strong></div>
                 <div><span>Pesanan Kirim</span><strong>{matchingReport.summary.stores_sent}</strong></div>
                 <div><span>Proses Produksi</span><strong>{matchingReport.summary.stores_in_production}</strong></div>
               </div>
