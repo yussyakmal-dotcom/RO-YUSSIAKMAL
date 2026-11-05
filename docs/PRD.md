@@ -159,3 +159,10 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - **Simpan Draft** tetap bisa diedit; Qty 0 diperbolehkan. **Kirim** hanya menyertakan baris Qty ≥1, seluruh bilangan bulat. Jika semuanya 0 → `NO_ORDER`.
 - Validasi dilakukan di **frontend dan backend**; API menolak nilai desimal dari klien lain. Draft historis yang sudah terlanjur berisi Qty desimal harus diperbaiki oleh operator sebelum Kirim, **tanpa pembulatan otomatis**.
 - Batas ini berlaku pada **input Qty pesanan toko**, bukan jumlah bahan baku/BoM atau UoM lain di Odoo. Tidak perlu migration PostgreSQL untuk perubahan input ini.
+
+## Milestone backend Auto-submit H-2 07:00 WIB (2026-11-05)
+- Command backend membaca tanggal Asia/Jakarta dan pada/pasca jam 07:00 H-2 memfinalisasi Draft **yang sudah tersimpan** untuk delivery date H+2, semua toko/dapur/slot. Hanya Qty integer ≥1 dipertahankan; seluruh nol/empty menjadi NO_ORDER. Lock dan audit otomatis.
+- Default preview read-only; `--apply` eksplisit dan command tidak boleh dijalankan sebelum cutoff WIB. Re-run tidak menggandakan order karena status KIRIM/NO_ORDER dikecualikan dan row lock transaksi.
+- Template timer systemd tersedia; **baru bekerja otomatis setelah administrator meng-enable di Debian**, bukan langsung saat deploy code.
+- Manual Kirim dan Auto Kirim memakai status yang sama untuk konsolidasi, dibedakan `auto_submitted` dan audit log.
+- **Belum final:** apakah API harus menolak edit/new Draft setelah cutoff 07 H-2, dan apakah downtime harus otomatis catch-up. Jangan anggap fungsi cutoff benar-benar enforcement sampai kebijakan ini disepakati.
