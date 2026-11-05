@@ -19,6 +19,7 @@ export interface OrderItem {
 export interface StoreOrder {
   id: number | null;
   status: OrderStatus;
+  auto_submitted: boolean;
   editable: boolean;
   store: NamedOption;
   kitchen: NamedOption;
