@@ -74,7 +74,10 @@ function ProductionApp() {
       { delivery_date: deliveryDate, kitchen_code: kitchenCode, schedule_code: scheduleCode },
       controller.signal,
     ).then((data) => {
-      if (!controller.signal.aborted) setReport(data);
+      if (!controller.signal.aborted) {
+        setReport(data);
+        if (data.summary.stores_sent === 0) setShowRecent(true);
+      }
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
         setError(err instanceof Error ? err.message : "Gagal memuat rekap.");
@@ -226,7 +229,7 @@ function ProductionApp() {
                     onClick={() => setShowRecent((value) => !value)}
                   >{showRecent ? "Tutup daftar" : "Lihat Kirim terbaru"}</button>
                 </div>
-                {(showRecent || (report && report.summary.stores_sent === 0)) && (
+                {showRecent && (
                   <div className="production-recent-body">
                     {recentLoading && <p>Memuat pesanan Kirim terbaru…</p>}
                     {recentError && <div className="message error" role="alert">{recentError}</div>}
