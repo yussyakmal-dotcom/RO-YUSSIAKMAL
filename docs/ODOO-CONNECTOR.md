@@ -74,3 +74,17 @@ Import boleh diulang: data master dicocokkan dengan **Odoo ID**. Tidak ada trans
 - Stok usable vs reserved, UoM conversion, dan integrasi Draft MO/Transfer.
 - Produk Odoo archived tidak dihapus/dinonaktifkan secara otomatis oleh sync ini.
 - Tenant nyata belum diuji; hasil tests menggunakan respons Odoo tiruan.
+
+## Verifikasi tenant nyata — 2026-11-05
+
+Pengguna telah menjalankan perintah berikut di server Debian dan melaporkan hasilnya dalam percakapan proyek:
+
+- `python manage.py odoo_probe`: koneksi JSON-2 **berhasil** dengan akun read-only; contoh warehouse `T_SD`.
+- `python manage.py odoo_sync_master --apply`: **berhasil** menyimpan master di PostgreSQL middleware.
+- Warehouse ditemukan: **19**, missing **0**.
+- Stock location cocok: **19**, missing **0**.
+- Produk dibaca: **2.553**.
+- BoM dibaca: **957**.
+- Produk dengan kandidat BoM ambigu: **0**.
+
+**Batas interpretasi hasil:** angka 957 adalah jumlah record BoM yang dibaca, **bukan** bukti semua SKU punya BoM ataupun setiap SKU telah dipetakan ke dapur. Sinkronisasi rutin ini tidak memodifikasi `ProductionAssignment`. Sumber data untuk initial mapping SKU → dapur belum dikonfirmasi. Read-only connector terverifikasi pada tenant nyata untuk probe dan master import, belum untuk stok live/transaksi MO/DO.
