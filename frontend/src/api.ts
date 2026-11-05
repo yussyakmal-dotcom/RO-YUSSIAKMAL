@@ -146,7 +146,7 @@ export async function sendOrder(orderId: number): Promise<SendResult> {
   });
 }
 
-export type ProductionStoreStatus = "KIRIM" | "PROSES_PRODUKSI" | "NO_ORDER" | "DRAFT" | "NOT_ENTERED";
+export type ProductionStoreStatus = "KIRIM" | "PROSES_PRODUKSI";
 
 export interface ProductionDemand {
   delivery_date: string;
@@ -159,9 +159,6 @@ export interface ProductionDemand {
     stores_total: number;
     stores_sent: number;
     stores_in_production: number;
-    stores_no_order: number;
-    stores_draft: number;
-    stores_not_entered: number;
     sku_count: number;
     qty_total: string;
   };
