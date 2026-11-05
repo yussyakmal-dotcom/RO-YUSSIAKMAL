@@ -139,3 +139,6 @@ docker compose exec api python manage.py migrate --noinput
 ```
 
 Panduan lengkap: [Antrean Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+### Lihat rekap tanpa keluar dari antrean
+Di Workspace Admin Produksi, tombol **Lihat rekap** membuka pop-up di atas daftar, berisi total SKU/Qty dan rincian asal toko. Tombol **Tutup Rekap**, ikon ×, Escape, atau klik di luar pop-up menutupnya; fokus kembali ke tombol pada baris sebelumnya tanpa mengubah status, filter atau pagination. Interaksi diuji lewat `npm run test --prefix frontend` dalam CI.
