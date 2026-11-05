@@ -102,3 +102,9 @@ docker compose exec api python manage.py auto_submit_store_orders
 Setelah preview, sistem dapat dijadwalkan pukul **07:00 WIB** menggunakan template **systemd timer** di `deploy/systemd/`. Timer **tidak otomatis aktif setelah git pull atau Docker rebuild**; pemasangan dan aktivasi memerlukan langkah eksplisit pada Debian. Setelah diaktifkan, `--apply` hanya memfinalisasi Draft yang sudah ada untuk tanggal kirim H+2: Qty integer ≥ 1 → KIRIM, semuanya nol → NO_ORDER, lalu terkunci dan dicatat audit. Tidak membuat MO maupun menulis Odoo.
 
 **Peringatan operasional:** Draft yang baru dibuat setelah run 07:00 belum dicegah/diproses ulang; kebijakan input terlambat masih perlu ditetapkan sebelum dijadikan sistem tanpa pengawasan. Baca [panduan timer dan batas V1](docs/AUTO-SUBMIT-H-2.md) sebelum mengaktifkan jadwal.
+
+## Tampilan teknis Store Order / Store Order Line di Django Admin
+
+Menu **Store orders** dan **Store order lines** pada `/admin/` adalah halaman **pemeriksaan read-only**. Daftarnya menampilkan toko, dapur, tanggal kirim, jadwal, SKU, nama produk, Qty, serta status pesanan; bukan lagi label `StoreOrderLine object (18)`. Qty integer ditampilkan tanpa `.0000` (misalnya `78`), sedangkan data lama yang benar-benar pecahan diberi tanda perlu koreksi.
+
+**Jangan mengubah pesanan lewat Django Admin.** Draft diubah pada `/toko/`; setelah Kirim atau NO_ORDER datanya terkunci. Kolom PostgreSQL tetap Decimal(18,4) demi kompatibilitas, tetapi UI/API toko tetap menerima Qty integer saja. Tidak ada migration database untuk perbaikan tampilan ini.

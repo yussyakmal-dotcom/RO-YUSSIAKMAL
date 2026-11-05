@@ -88,3 +88,6 @@ Workspace React dapat dibuka di **http://localhost:900/toko/** setelah build Doc
 
 ## Auto-submit terjadwal H-2 pukul 07.00 WIB
 Backend sekarang memiliki command `auto_submit_store_orders` (default preview); timer harian Debian harus diaktifkan terpisah. Auto-submit mengubah Draft yang sudah ada untuk delivery date H+2 menjadi KIRIM atau NO_ORDER (Qty integer ≥1), serta mencatat `auto_submitted` dan audit. UI menampilkan label "Terkirim otomatis" untuk order final. Kebijakan Draft terlambat setelah cutoff belum diterapkan. Rujukan lengkap: [Auto-submit H-2](./AUTO-SUBMIT-H-2.md).
+
+## Pemeriksaan pesanan melalui Django Admin
+Menu `Store orders` dan `Store order lines` sekarang **hanya untuk melihat** rincian pesanan. Tabel detail memperlihatkan toko, dapur, tanggal kirim, jadwal, SKU, nama dan Qty integer (contoh data basis `78.0000` ditampilkan sebagai `78`). Admin tidak dapat menambah/mengedit/menghapus baris langsung: semua perubahan Draft wajib lewat Workspace Toko `/toko/`. Baris setelah KIRIM/NO_ORDER tidak boleh diedit. Kuantitas lama yang pecahan ditandai sebagai masalah data, bukan dibulatkan.

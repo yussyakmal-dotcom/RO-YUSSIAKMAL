@@ -165,3 +165,9 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **O-014 (❓ terbuka):** Kebijakan input/edit Draft **setelah** batas waktu 07 H-2 belum disepakati; versi ini tidak menolak late Draft dan tidak menjalankan ulang tiap menit. Harus diputuskan sebelum pemakaian tanpa pengawasan.
 - **O-015 (❓ terbuka):** Prosedur backlog saat downtime di jam cutoff. Timer awal memilih `Persistent=false` agar tidak otomatis finalisasi data pengujian pada saat aktivasi malam hari.
 - Panduan: [Auto-submit H-2](./AUTO-SUBMIT-H-2.md).
+
+## Perbaikan pemeriksaan Store Order Line — 2026-11-05
+- **I-030 (✅ UI Django Admin):** Tabel Store Order Line yang semula hanya menampilkan `StoreOrderLine object (id)` sekarang menampilkan toko, dapur, tanggal kirim, jadwal, SKU, nama produk, Qty dan status. Teks nama terkait juga dibuat informatif.
+- **I-031 (✅ display integer):** Nilai basis data `78.0000` adalah bilangan bulat 78, jadi Django Admin menampilkan `78`; nilai historis pecahan ditandai untuk koreksi, tidak dibulatkan diam-diam.
+- **I-032 (✅ pengamanan):** Halaman `Store orders` dan `Store order lines` di Django Admin menjadi **read-only**; tidak boleh add/edit/delete melalui admin agar keputusan Draft/Kirim dan validasi integer tidak bisa dilewati. Operator memakai Workspace Admin Toko untuk edit Draft.
+- **Tidak ada migration:** Struktur PostgreSQL tetap sama dan aturan integer pada API tidak berubah.

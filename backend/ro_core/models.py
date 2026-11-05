@@ -68,7 +68,7 @@ class Product(models.Model):
     synced_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return self.sku or self.name
+        return f"{self.sku} — {self.name}" if self.sku else self.name
 
 
 class ProductionAssignment(models.Model):
@@ -154,6 +154,14 @@ class StoreOrder(models.Model):
             models.Index(fields=["delivery_date", "status"], name="ix_ro_order_date")
         ]
 
+    def __str__(self):
+        if not self.pk:
+            return "Pesanan toko baru"
+        return (
+            f"Order #{self.pk} · {self.store.code} → {self.kitchen.code}"
+            f" · {self.delivery_date} / {self.schedule.code}"
+        )
+
 
 class StoreOrderLine(models.Model):
     order = models.ForeignKey(
@@ -168,6 +176,12 @@ class StoreOrderLine(models.Model):
                 fields=["order", "product"], name="uq_ro_store_order_line"
             )
         ]
+
+    def __str__(self):
+        if not self.pk:
+            return "Baris pesanan baru"
+        qty = str(int(self.qty)) if self.qty == self.qty.to_integral_value() else str(self.qty)
+        return f"{self.product.sku or self.product.name} · Qty {qty} · Order #{self.order_id}"
 
 
 class ProductionPlan(models.Model):
