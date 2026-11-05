@@ -36,16 +36,17 @@ docker compose exec api python manage.py odoo_sync_master --apply  # middleware 
 
 Read [connector setup and limitations](docs/ODOO-CONNECTOR.md) before applying. Mapping SKU-to-kitchen remains middleware-owned and is never overwritten by routine sync. Live Odoo integration is not configured until credentials are supplied locally.
 
-## Initial SKU → dapur mapping dari Product Category
+## Menentukan dapur produksi dari Odoo Operation Type
 
-Setelah master Odoo berhasil diimpor, cek pemetaan kategori ke dapur:
+**Koreksi penting:** Product Category hanya mengelompokkan produk; **bukan penentu dapur produksi**. Saat MO dibuat, Odoo memakai `mrp.production.picking_type_id` (Manufacturing Operation Type). Perintah mapping kategori lama sengaja dinonaktifkan, termasuk `--apply`.
+
+Lihat daftar Operation Type manufaktur yang benar dari tenant Anda (READ-ONLY):
 
 ```bash
-docker compose exec api python manage.py init_kitchen_mapping          # preview, tidak menulis
-docker compose exec api python manage.py init_kitchen_mapping --apply  # mapping kosong saja
+docker compose exec api python manage.py odoo_mo_operation_types
 ```
 
-Periksa terlebih dahulu kategori yang belum cocok dalam preview. Mapping yang sudah ada atau diubah manual **tidak ditimpa**, termasuk saat sync Odoo berikutnya. Kategori Paket diarahkan ke Packing (PCK). Tidak diperlukan migration baru. Lihat [panduan mapping awal](docs/ODOO-CONNECTOR.md#initial-mapping-sku--dapur-dari-product-category).
+Hasilnya menunjukkan ID Operation Type, nama, warehouse dan lokasi default. Setelah diverifikasi, kita dapat menghubungkan dapur/warehouse middleware ke Operation Type Odoo **dengan konfigurasi eksplisit**, bukan menebak lewat kategori. Pemetaan SKU yang sudah ada tidak dimodifikasi oleh pemeriksaan ini. Lihat [panduan](docs/ODOO-CONNECTOR.md#verifikasi-manufacturing-operation-type).
 
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 
