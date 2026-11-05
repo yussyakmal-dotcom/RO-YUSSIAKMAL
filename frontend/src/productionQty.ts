@@ -1,19 +1,32 @@
-/** Format quantities without ever silently rounding a fractional value. */
+export type QuantityByUom = { qty: string; uom: string };
+
+/** Only represent whole numbers to operators; never round real fractions. */
 export function formatProductionQty(value: string): string {
   const input = value.trim();
-  // Django/PostgreSQL Decimal(18,4) often serializes 1232 as "1232.0000".
-  // Only discard fractional zeroes, not a real fractional quantity.
-  if (/^\d+(?:\.0+)?$/.test(input)) {
-    try {
-      return new Intl.NumberFormat("id-ID").format(BigInt(input.split(".")[0]));
-    } catch {
-      return input.split(".")[0];
-    }
+  if (!/^\d+(?:\.0+)?$/.test(input)) return "Perlu koreksi Qty";
+  try {
+    return new Intl.NumberFormat("id-ID").format(BigInt(input.split(".")[0]));
+  } catch {
+    return "Perlu koreksi Qty";
   }
-  return input.replace(".", ",");
 }
 
-/** Show a single actual UoM, or an explicit mixed-UoM marker. */
-export function productionQtyLabel(value: string, uom: string | null): string {
-  return `${formatProductionQty(value)} ${uom || "beragam UoM"}`;
+/**
+ * A total is meaningful only within a single UoM.
+ * Never show 1.5, decimal-place artifacts, or a sum of Kg and gram as
+ * a single number. UoM conversion requires explicit master rules.
+ */
+export function productionQtyLabel(
+  value: string | null,
+  uom: string | null,
+  byUom: QuantityByUom[] = [],
+  invalid = false,
+): string {
+  if (invalid) return "Perlu koreksi Qty";
+  if (byUom.length > 1) {
+    return byUom.map((part) => `${formatProductionQty(part.qty)} ${part.uom}`).join(" · ");
+  }
+  if (value === null) return "Perlu koreksi Qty";
+  if (value === "0" && !uom) return "0 (tanpa SKU)";
+  return `${formatProductionQty(value)} ${uom || "pcs"}`;
 }
