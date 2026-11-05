@@ -124,3 +124,19 @@ class AutoSubmitTests(TestCase):
             with self.assertRaisesMessage(CommandError, "07:00 WIB"):
                 call_command("auto_submit_store_orders", "--apply", stdout=StringIO())
         self.assertEqual(StoreOrder.objects.filter(status="DRAFT").count(), 1)
+
+    def test_command_reports_invalid_legacy_draft_as_failure(self):
+        from io import StringIO
+        from unittest.mock import patch
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        invalid = self.make_order(qty=Decimal("1.5"))
+        self.make_order(qty=4, schedule=self.pagi)
+        output = StringIO()
+        with patch("ro_core.auto_submit.timezone.now", return_value=self.now):
+            with self.assertRaisesMessage(CommandError, "Qty tidak valid"):
+                call_command("auto_submit_store_orders", "--apply", stdout=output)
+        self.assertIn(str(invalid.pk), output.getvalue())
+        self.assertEqual(StoreOrder.objects.get(pk=invalid.pk).status, "DRAFT")
+        self.assertEqual(StoreOrder.objects.filter(status="KIRIM").count(), 1)
