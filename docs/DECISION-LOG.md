@@ -135,3 +135,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-015 (implementasi awal):** Django Admin mendukung unduh format Excel, preview upload, impor Excel, edit mapping/manual, dan API read-only daftar SKU untuk frontend. Toko Draft/Kirim dan React UI belum dibangun.
 - **I-016 (aturan impor aman):** Tidak menimpa master Odoo, tidak menghapus SKU yang absen dari Excel berikutnya, melarang assignment lintas dapur secara diam-diam, dan mencatat audit perubahan.
 - Referensi: [Template Pemesanan per Dapur](./TEMPLATE-PEMESANAN.md).
+
+## Penegasan Draft / Kirim oleh pengguna (2026-11-05)
+- **D-049 (✅):** Saat **Simpan Draft**, pesanan masih dapat dibuka lagi untuk mengedit Qty. Draft tidak sama dengan Kirim dan belum masuk konsolidasi produksi.
+- **D-050 (✅):** Saat **Kirim**, hanya baris dengan Qty **≥1** yang diproses; Qty di bawah 1 dikeluarkan. KIRIM mengunci penyuntingan Admin Toko.
+- **I-017 (implementasi API):** Endpoint Django untuk membaca Draft/daftar SKU, menyimpan ulang Draft, dan Kirim dengan transaksi atomik/row lock. Jika tidak ada baris Qty ≥1, status `NO_ORDER` sesuai keputusan sebelumnya.
+- **I-018 (batas milestone):** Frontend React dan penjadwal auto-submit H-2 07.00 WIB belum diimplementasikan; API menangani Kirim manual terlebih dahulu.
+- Referensi: [Aturan API Draft/Kirim](./ADMIN-TOKO-DRAFT-KIRIM.md).

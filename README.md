@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md)
 
 ## Jalankan pengembangan lokal
 
@@ -62,6 +62,16 @@ curl http://127.0.0.1:900/health/
 API daftar SKU aktif (perlu autentikasi): `GET /api/v1/order-templates/PST/`. Mengembalikan `id, sku, name, qty:0`. UI input Qty/Draft/Kirim React belum tersedia pada milestone ini.
 
 Petunjuk dan aturan impor: [Template Pemesanan per Dapur](docs/TEMPLATE-PEMESANAN.md).
+
+## Admin Toko — Draft dan Kirim (API)
+
+Pesanan per **toko × dapur × tanggal kirim × jadwal**. `Simpan Draft` dapat dibuka dan diedit lagi; `Kirim` hanya mempertahankan Qty **>= 1** dan mengunci pesanan. Semua nol → status `NO_ORDER`.
+
+- `GET /api/v1/store-orders/?store_code=T_BAN&kitchen_code=JP&delivery_date=2026-11-07&schedule_code=SUBUH` — buka template dan Qty draft lama
+- `POST /api/v1/store-orders/` — simpan atau ganti Qty Draft
+- `POST /api/v1/store-orders/<id>/send/` — Kirim (Qty >= 1), tidak dapat diedit lagi
+
+API membutuhkan akun login, role dan akses toko. Lihat [aturan serta contoh payload](docs/ADMIN-TOKO-DRAFT-KIRIM.md). Frontend React dan auto-submit 07.00 masih tahap berikutnya.
 
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 

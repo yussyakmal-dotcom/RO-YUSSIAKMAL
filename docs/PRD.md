@@ -138,3 +138,11 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Upload aman: preview sebelum impor; validasi SKU mengacu ke master Odoo; SKU tidak ditemukan, duplikat, atau sudah ditempatkan di dapur lain dilaporkan dan tidak diimport secara parsial; SKU yang absen dari Excel baru tidak dihapus otomatis.
 - **Operation Type Odoo tetap penentu lokasi produksi pada MO.** Template manual hanya menentukan SKU yang muncul untuk pemesanan/perencanaan; ketika membuat MO, middleware harus mengirim Operation Type sesuai dapur.
 - Spesifikasi dan petunjuk: [Template Pemesanan per Dapur](./TEMPLATE-PEMESANAN.md).
+
+## Addendum — Detail Simpan Draft / Kirim pada formulir Admin Toko (2026-11-05)
+- **Simpan Draft bukan submit:** dapat dibuka kembali berkali-kali, Qty yang sudah dimasukkan dipertahankan dan masih dapat diubah/di-nol-kan sampai pengguna memilih Kirim.
+- **Kirim:** hanya baris Qty ≥ 1 yang diproses; baris Qty 0 (atau yang lebih kecil dari 1) dikeluarkan. Status menjadi KIRIM dan Qty terkunci bagi Admin Toko.
+- **No Order:** bila seluruh Qty tidak memenuhi minimum, status `NO_ORDER` tanpa MO, kondisi normal untuk toko yang libur.
+- Per toko × dapur × delivery date × delivery schedule tetap berstatus independen; hanya order KIRIM masuk konsolidasi.
+- Kuantitas Draft yang sudah tersimpan tidak hilang diam-diam jika template dapur kemudian diubah. Formulir edit dapat memperlihatkan item lama tersebut dengan status tidak aktif di template untuk diperiksa.
+- Implementasi awal API: [Admin Toko — Draft dan Kirim](./ADMIN-TOKO-DRAFT-KIRIM.md). Auto-submit H-2 07.00 WIB tetap direncanakan, belum otomatis berjalan.
