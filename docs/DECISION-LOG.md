@@ -81,3 +81,11 @@
 - [PRD](./PRD.md)
 - [DDL](./DDL.md)
 - Repository: https://github.com/yussyakmal-dotcom/RO-YUSSIAKMAL
+
+
+## Pembaruan 2026-11-05 — Finalisasi skema ringan
+- **D-041 (✅):** Pengguna meminta finalisasi DDL dan rancangan model Django dengan pendekatan pragmatis: **jangan terlalu ketat, bukan super app**.
+- **T-001 (🟡 implementasi disarankan):** Django ORM + migrations menjadi satu-satunya sumber kebenaran untuk skema riil. DDL tetap dokumentasi referensi.
+- **T-002 (🟡 implementasi disarankan):** Gunakan Django built-in auth/Groups, cache komponen BoM dalam JSONB, audit sederhana, dan outbox minimal; tidak membuat workflow engine generik ataupun ledger stok sendiri.
+- Dokumentasi terkait: [DDL Lean](./DDL.md) dan [Django Models](./DJANGO-MODELS.md).
+- Keputusan bisnis sebelumnya tetap berlaku; beberapa detail integrasi Odoo, DO, dan kebutuhan Paket masih terbuka.
