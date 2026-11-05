@@ -184,6 +184,7 @@ export interface ProductionDemand {
       order_id: number;
       qty: string;
       auto_submitted: boolean;
+      status: ProductionQueueStatus;
     }[];
   }[];
 }
