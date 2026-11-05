@@ -68,47 +68,29 @@ Import boleh diulang: data master dicocokkan dengan **Odoo ID**. Tidak ada trans
 - Saat implementasi masih tahap development, **port host tetap 900**. Tidak ada endpoint web untuk menjalankan sync; perintah hanya dijalankan oleh operator di shell server.
 - Gunakan akses API key dengan prinsip hak minimum dan rotasi; setiap penggunaan API key dicatat oleh Odoo sesuai izin akun.
 
-## Initial mapping SKU → dapur dari Product Category
+## Verifikasi Manufacturing Operation Type
 
-Pengguna memastikan bahwa **Product Category** pada daftar Products Odoo adalah penentu dapur awal. Screenshot menampilkan kategori `Legit`, `Paket`, dan `Pastry`. Kategori tersebut sudah dibaca menjadi field `Product.category` middleware melalui `categ_id`. Tidak perlu memanggil API tambahan atau mengubah skema database.
+**Koreksi sumber aturan:** Product Category di daftar Products Odoo adalah **pengelompokan produk saja**. Dapur tempat suatu produk diproduksi pada MO ditentukan dari **Operation Type manufaktur yang dipilih saat membuat MO** (`mrp.production.picking_type_id`), yang merujuk `stock.picking.type`.
 
-Perintah aman untuk dijalankan pada server yang sudah mengimpor master:
+Untuk melihat jenis operasi manufaktur Odoo dan warehouse/lokasi yang terkait:
 
 ```bash
 git pull origin main
-docker compose exec api python manage.py init_kitchen_mapping
+docker compose exec api python manage.py odoo_mo_operation_types
 ```
 
-Preview menunjukkan jumlah SKU kandidat, kategori yang dikenali dan belum cocok, mapping lama, serta warehouse yang belum tersedia. Periksa hasilnya dahulu; **tidak ada perubahan** pada mode preview.
+Perintah tersebut memakai endpoint JSON-2 `stock.picking.type/search_read` dengan domain `code = mrp_operation`, mencetak ID Operation Type dan warehouse/lokasi default. **Read-only:** tidak menulis ke Odoo maupun PostgreSQL middleware. Jika API user tidak punya izin membaca Operation Type, minta izin *read* untuk akun bot; jangan memperluasnya menjadi write.
 
-Kandidat mapping berdasarkan **nama kategori persis** (perbedaan kapital/spasi diabaikan), tanpa tebakan dari nama produk, BoM, kode SKU, atau nama kategori bertingkat:
+### Prosedur yang DIBATALKAN
 
-| Category Odoo (nama tepat) | Warehouse middleware |
-|---|---|
-| Asin | ASN |
-| Cake Slice | CKS |
-| Gorengan | GRG |
-| Jajan Pasar | JP |
-| Pastry | PST |
-| Roti | ROTI |
-| Sultan & Lemper | SUL |
-| Tart | TART |
-| Premik | PREMI |
-| Legit | LEGIT |
-| Paket | PCK (Packing) |
+`init_kitchen_mapping` dan `init_kitchen_mapping --apply` **dinonaktifkan**. Jangan menjalankan instruksi sebelumnya yang menyimpulkan `Legit → LEGIT`, `Pastry → PST`, atau `Paket → PCK` dari kategori. Itu hanya kebetulan label yang mirip, **bukan dasar teknis pemilihan dapur**.
 
-**Catatan:** kategori selain Legit, Paket, dan Pastry pada tabel di atas adalah **kandidat konvensi nama berdasarkan daftar dapur**, bukan kategori yang sudah terbukti ada di tenant Odoo. Preview memberi verifikasi realnya. Nama kategori seperti `Bahan Baku`, `WIP`, `Premix`, atau nested path `Raw Materials / Pastry` tidak dipetakan otomatis. Ini menghindari keliru menempatkan bahan baku sebagai produk jadi.
+Tabel `ProductionAssignment` tetap boleh dipakai sebagai pilihan dapur untuk perencanaan, tetapi **mapping dapur → ID Manufacturing Operation Type** harus dikonfigurasi setelah hasil inspeksi Odoo diperiksa. Pada pembuatan MO Draft nantinya middleware akan mengirim `picking_type_id` yang cocok; tanpa mapping valid, pembuatan MO harus dihentikan dengan pesan jelas. Tidak ada perubahan schema atau data assignment pada tahap inspeksi.
 
-Jika preview sudah sesuai:
-
-```bash
-docker compose exec api python manage.py init_kitchen_mapping --apply
-```
-
-`--apply` hanya membuat record `ProductionAssignment` yang **belum ada** di PostgreSQL lokal. Tidak ada perubahan di Odoo, tidak ada perubahan mapping SKU yang sudah dimodifikasi manual. Menjalankannya kembali tidak menghasilkan duplikasi. Setelahnya, ubah pemindahan dapur melalui pengelolaan middleware/Django Admin (sementara), bukan dengan sinkronisasi rutin.
+Jika perintah kategori lama sudah telanjur dijalankan dengan `--apply`, jangan otomatis hapus tabel assignment: lakukan audit dan koreksi berdasarkan keputusan operator.
 
 ## Belum diselesaikan
-- Variasi nama kategori produksi lain di tenant yang tidak cocok persis, serta kategori WIP/Premix; preview harus direview.
+- Daftar dan ID Operation Type manufaktur Odoo untuk 10 dapur dan Packing harus diverifikasi dengan perintah read-only; konfigurasi mapping ke warehouse akan dibuat sesudahnya.
 - Nama field/customisasi BoM atau product category tenant (periksa /doc).
 - Stok usable vs reserved, UoM conversion, dan integrasi Draft MO/Transfer.
 - Produk Odoo archived tidak dihapus/dinonaktifkan secara otomatis oleh sync ini.
@@ -126,4 +108,4 @@ Pengguna telah menjalankan perintah berikut di server Debian dan melaporkan hasi
 - BoM dibaca: **957**.
 - Produk dengan kandidat BoM ambigu: **0**.
 
-**Batas interpretasi hasil:** angka 957 adalah jumlah record BoM yang dibaca, **bukan** bukti semua SKU punya BoM ataupun setiap SKU telah dipetakan ke dapur. Sinkronisasi rutin ini tidak memodifikasi `ProductionAssignment`. Sumber data untuk initial mapping SKU → dapur belum dikonfirmasi. Read-only connector terverifikasi pada tenant nyata untuk probe dan master import, belum untuk stok live/transaksi MO/DO.
+**Batas interpretasi hasil:** angka 957 adalah jumlah record BoM yang dibaca, **bukan** bukti semua SKU punya BoM ataupun setiap SKU telah dipetakan ke dapur. Sinkronisasi rutin ini tidak memodifikasi `ProductionAssignment`. Sumber *default assignment* SKU → dapur belum dipilih; routing MO menggunakan Operation Type Odoo, **bukan kategori**. Read-only connector terverifikasi pada tenant nyata untuk probe dan master import, belum untuk stok live/transaksi MO/DO.
