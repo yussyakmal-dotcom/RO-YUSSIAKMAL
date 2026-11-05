@@ -1,50 +1,24 @@
-"""Initial SKU -> kitchen mapping from cached Odoo Product Category.
+"""Retired unsafe category-based initial mapping command.
 
-Default: preview only. --apply writes local PostgreSQL mapping once and
-never updates an existing ProductionAssignment.
+Product Category is not the source of MO production routing in this tenant.
+MO Operation Type (mrp.production.picking_type_id) determines production
+warehouse. Do not infer assignments from a category name.
 """
-import json
-
 from django.core.management.base import BaseCommand, CommandError
-
-from ro_core.category_mapping import (
-    CATEGORY_TO_WAREHOUSE, apply_category_mapping, preview_category_mapping,
-)
 
 
 class Command(BaseCommand):
-    help = "Preview initial mapping from product category; --apply inserts missing mappings."
+    help = "DISABLED: category-based SKU kitchen assignment was an incorrect assumption."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--apply", action="store_true",
-            help="Insert NEW SKU-to-kitchen mappings into middleware only.",
-        )
+        # Keep the flag to intercept old copy/pasted --apply commands safely.
+        parser.add_argument("--apply", action="store_true")
 
     def handle(self, *args, **options):
-        preview = preview_category_mapping()
-        self.stdout.write(json.dumps(preview.summary, indent=2, ensure_ascii=False))
-        if not options["apply"]:
-            self.stdout.write(self.style.WARNING(
-                "PREVIEW: tidak ada perubahan. Periksa kategori dan jumlahnya; "
-                "gunakan --apply hanya setelah hasil sesuai."
-            ))
-            return
-
-        if preview.summary["missing_warehouse_targets"]:
-            raise CommandError(
-                "Ada warehouse tujuan yang tidak ditemukan / jenisnya berbeda. "
-                "Perbaiki sebelum menjalankan --apply."
-            )
-        if not preview.candidates:
-            self.stdout.write("Tidak ada SKU baru untuk dipetakan.")
-            return
-        try:
-            created = apply_category_mapping(preview)
-        except ValueError as exc:
-            raise CommandError(str(exc)) from None
-
-        self.stdout.write(self.style.SUCCESS(
-            f"Berhasil membuat {created} mapping baru di PostgreSQL middleware. "
-            "Mapping lama tetap dipertahankan; Odoo tidak diubah."
-        ))
+        raise CommandError(
+            "DINONAKTIFKAN: Product Category BUKAN penentu dapur produksi. "
+            "Odoo menentukan jalur MO melalui Operation Type (picking_type_id). "
+            "Perintah ini tidak akan membuat atau mengubah mapping. "
+            "Gunakan 'python manage.py odoo_mo_operation_types' untuk "
+            "memeriksa operation type manufaktur Odoo secara READ-ONLY."
+        )
