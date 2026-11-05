@@ -1,312 +1,202 @@
-# DDL PostgreSQL — RO Middleware (Draft v0.1)
+# DDL PostgreSQL — RO Middleware V1.0 (Lean Baseline)
 **Tanggal:** 2026-11-05  
-**Status:** Usulan skema untuk review, **belum migration produksi**.  
-**Prinsip:** Odoo adalah sumber resmi SKU/BoM/stok dan dokumen manufaktur/transfer; tabel master terkait adalah cache/snapshot referensi. Semua timestamp disimpan `timestamptz` (UTC), disajikan ke pengguna sebagai Asia/Jakarta.
+**Status:** Final sebagai *baseline desain* V1; tidak berarti skema produksi sudah dimigrasi atau API Odoo telah diuji.  
+**Sumber skema eksekusi:** Django ORM + migrations. Jangan membuat tabel auth Django secara manual.  
+**Filosofi:** Sederhana, mudah direvisi, tidak membangun ERP kedua.
 
-## Diagram relasi (konseptual)
-```mermaid
-erDiagram
-  warehouse ||--o{ product_dapur_mapping : assigned
-  warehouse ||--o{ store_order : store
-  warehouse ||--o{ store_order : kitchen
-  product ||--o{ store_order_line : ordered
-  store_order ||--o{ store_order_line : contains
-  production_schedule ||--o{ store_order : mapped
-  production_plan ||--o{ production_plan_line : contains
-  product ||--o{ production_plan_line : planned
-  production_plan_line ||--o{ plan_order_allocation : attributed
-  store_order_line ||--o{ plan_order_allocation : attributed
-  production_plan ||--o{ material_request : generates
-  material_request ||--o{ material_request_line : contains
-  distribution_batch ||--o{ distribution_line : contains
-  integration_document ||--o{ integration_attempt : retries
-```
+## Cakupan
+Master cache Odoo (warehouse, produk, BoM), aturan internal (mapping dapur, slot jadwal, kapasitas, minimum stok), permintaan toko, konsolidasi produksi dan bahan, alokasi Packing, pengiriman dokumen Draft ke Odoo, audit sederhana.
 
-## SQL — tabel inti yang diusulkan
+**Tidak dibuat V1:** stock ledger middleware, approval engine, workflow engine generik, historisasi seluruh master, sistem produksi shift, scheduler produksi, tabel event-sourcing, transaksi stok paralel, multi-tenant.
+
+## Entity dan kunci
+| Tabel Django (konseptual) | Kolom inti | Constraint utama |
+|---|---|---|
+| `Warehouse` | `odoo_id, code, name, kind, stock_location_odoo_id` | Unique `odoo_id` dan `code` |
+| `Product` | `odoo_id, sku, name, category, uom, bom_odoo_id, bom_output_qty, bom_components(jsonb)` | Unique `odoo_id`; 1 BoM produksi aktif terpilih per SKU sebagai cache |
+| `ProductionAssignment` | `product, kitchen_warehouse, updated_at` | Unique `product` |
+| `Schedule` | `code, name, production_label, active, sort_order` | Unique `code` |
+| `ProductCapacity` | `product, schedule, max_qty` | Unique pasangan |
+| `MinStockRule` | `product, warehouse, min_qty` | Unique pasangan |
+| `StoreOrder` | `store, kitchen, delivery_date, schedule, status, submitted_at, auto_submitted` | Unique `store,kitchen,delivery_date,schedule` |
+| `StoreOrderLine` | `order, product, qty` | Unique `order,product` |
+| `ProductionPlan` | `kitchen, production_date, delivery_date, schedule, status` | Unique konteks rencana |
+| `ProductionPlanLine` | `plan, product, qty_requested, qty_planned, qty_mo, batch_qty, capacity_qty, bom_snapshot` | Unique `plan,product` |
+| `MaterialRequestLine` | `plan, product, gross_qty, stock_qty, minimum_qty, buffer_qty` | Unique `plan,product` |
+| `PackingAllocation` | `delivery_date, schedule, store, product, qty_requested, qty_allocated` | Unique `delivery_date,schedule,store,product` |
+| `OdooDocument` | `kind, source_document, origin_key, odoo_model, odoo_id, state, payload, error` | Unique `source_document` dan `origin_key` |
+| `DocumentCounter` | `warehouse, issue_date, last_value` | Unique `warehouse,issue_date` |
+| `AuditLog` | `actor, entity, entity_id, action, changes, created_at` | Index untuk lookup |
+
+**Pengguna/role:** gunakan `django.contrib.auth` (User, Group, Permission), bukan `app_user` custom. Group = STORE / PRODUCTION / PACKING / ADMIN. Akses toko diatur `UserWarehouseAccess` (user + warehouse); Administrator dapat membuka semua workspace dengan identitasnya sendiri.
+
+## DDL inti (referensi PostgreSQL)
+*Nama tabel dapat memakai prefix app otomatis dari Django; SQL berikut bukan migration yang dijalankan manual.*
+
 ```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE app_user (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- username varchar(120) NOT NULL UNIQUE,
- password_hash text NOT NULL,
- full_name varchar(200) NOT NULL,
- active boolean NOT NULL DEFAULT true,
- is_superuser boolean NOT NULL DEFAULT false,
- created_at timestamptz NOT NULL DEFAULT now(),
- updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE app_role (
- code varchar(30) PRIMARY KEY CHECK (code IN ('STORE','PRODUCTION','PACKING','ADMIN')),
- name varchar(100) NOT NULL
-);
-CREATE TABLE user_role (
- user_id uuid NOT NULL REFERENCES app_user(id),
- role_code varchar(30) NOT NULL REFERENCES app_role(code),
- PRIMARY KEY (user_id, role_code)
-);
-
 CREATE TABLE warehouse (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- odoo_warehouse_id bigint UNIQUE,
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ odoo_id bigint UNIQUE NOT NULL,
+ code varchar(32) UNIQUE NOT NULL,
  name varchar(160) NOT NULL,
- code varchar(32) NOT NULL UNIQUE,
- warehouse_kind varchar(24) NOT NULL CHECK (warehouse_kind IN ('CENTRAL','KITCHEN','PACKING','STORE')),
- active boolean NOT NULL DEFAULT true,
- synced_at timestamptz
-);
-CREATE TABLE stock_location (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- odoo_location_id bigint UNIQUE,
- warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- full_name varchar(180) NOT NULL,
- active boolean NOT NULL DEFAULT true,
- UNIQUE (warehouse_id, full_name)
-);
-CREATE TABLE user_warehouse_access (
- user_id uuid NOT NULL REFERENCES app_user(id),
- warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- PRIMARY KEY (user_id, warehouse_id)
-);
-CREATE TABLE product (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- odoo_product_id bigint NOT NULL UNIQUE,
- sku varchar(100),
- name varchar(255) NOT NULL,
- category_name varchar(100),
- uom_name varchar(60),
- active boolean NOT NULL DEFAULT true,
- synced_at timestamptz,
- UNIQUE (sku)
-);
-CREATE TABLE bom_header (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- odoo_bom_id bigint NOT NULL UNIQUE,
- product_id uuid NOT NULL REFERENCES product(id),
- output_qty numeric(18,6) NOT NULL CHECK (output_qty > 0),
- output_uom varchar(60),
- active boolean NOT NULL DEFAULT true,
- synced_at timestamptz
-);
-CREATE TABLE bom_component (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- bom_id uuid NOT NULL REFERENCES bom_header(id) ON DELETE CASCADE,
- component_product_id uuid NOT NULL REFERENCES product(id),
- component_qty numeric(18,6) NOT NULL CHECK (component_qty >= 0),
- component_uom varchar(60),
- UNIQUE (bom_id, component_product_id)
-);
-CREATE TABLE product_dapur_mapping (
- product_id uuid PRIMARY KEY REFERENCES product(id),
- warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- effective_from timestamptz NOT NULL DEFAULT now(),
- updated_by uuid REFERENCES app_user(id),
- updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE production_schedule (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- code varchar(40) NOT NULL UNIQUE,
- name varchar(120) NOT NULL,
- sequence_no integer NOT NULL,
- active boolean NOT NULL DEFAULT true,
- created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE delivery_schedule (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- code varchar(40) NOT NULL UNIQUE,
- name varchar(120) NOT NULL,
- production_schedule_id uuid NOT NULL REFERENCES production_schedule(id),
+ kind varchar(16) NOT NULL CHECK (kind IN ('CENTRAL','KITCHEN','PACKING','STORE')),
+ stock_location_odoo_id bigint,
  active boolean NOT NULL DEFAULT true
 );
-CREATE TABLE sku_schedule_capacity (
- product_id uuid NOT NULL REFERENCES product(id),
- production_schedule_id uuid NOT NULL REFERENCES production_schedule(id),
- max_qty numeric(18,6) NOT NULL CHECK (max_qty >= 0),
- updated_at timestamptz NOT NULL DEFAULT now(),
- PRIMARY KEY (product_id, production_schedule_id)
+CREATE TABLE product (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ odoo_id bigint UNIQUE NOT NULL,
+ sku varchar(100) NOT NULL DEFAULT '',
+ name varchar(255) NOT NULL,
+ category varchar(100) NOT NULL DEFAULT '',
+ uom varchar(40) NOT NULL DEFAULT '',
+ bom_odoo_id bigint,
+ bom_output_qty numeric(18,4),
+ bom_components jsonb NOT NULL DEFAULT '[]'::jsonb,
+ active boolean NOT NULL DEFAULT true,
+ synced_at timestamptz
+);
+CREATE TABLE schedule (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ code varchar(40) UNIQUE NOT NULL,
+ name varchar(100) NOT NULL,
+ production_label varchar(120) NOT NULL DEFAULT '',
+ sort_order integer NOT NULL DEFAULT 0,
+ active boolean NOT NULL DEFAULT true
+);
+CREATE TABLE production_assignment (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ product_id bigint UNIQUE NOT NULL REFERENCES product(id),
+ kitchen_id bigint NOT NULL REFERENCES warehouse(id),
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE product_capacity (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ product_id bigint NOT NULL REFERENCES product(id),
+ schedule_id bigint NOT NULL REFERENCES schedule(id),
+ max_qty numeric(18,4) NOT NULL CHECK (max_qty >= 0),
+ UNIQUE (product_id,schedule_id)
 );
 CREATE TABLE min_stock_rule (
- product_id uuid NOT NULL REFERENCES product(id),
- warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- min_qty numeric(18,6) NOT NULL CHECK (min_qty >= 0),
- updated_at timestamptz NOT NULL DEFAULT now(),
- PRIMARY KEY (product_id, warehouse_id)
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ product_id bigint NOT NULL REFERENCES product(id),
+ warehouse_id bigint NOT NULL REFERENCES warehouse(id),
+ min_qty numeric(18,4) NOT NULL CHECK (min_qty >= 0),
+ UNIQUE (product_id,warehouse_id)
 );
 CREATE TABLE store_order (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- store_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- production_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ store_id bigint NOT NULL REFERENCES warehouse(id),
+ kitchen_id bigint NOT NULL REFERENCES warehouse(id),
  order_date date NOT NULL,
  delivery_date date NOT NULL,
- delivery_schedule_id uuid NOT NULL REFERENCES delivery_schedule(id),
- status varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','KIRIM','NO_ORDER')),
- submitted_at timestamptz,
- submitted_by uuid REFERENCES app_user(id),
+ schedule_id bigint NOT NULL REFERENCES schedule(id),
+ status varchar(12) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','KIRIM','NO_ORDER')),
  auto_submitted boolean NOT NULL DEFAULT false,
- created_by uuid REFERENCES app_user(id),
+ submitted_at timestamptz,
  created_at timestamptz NOT NULL DEFAULT now(),
- updated_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE (store_warehouse_id, production_warehouse_id, delivery_date, delivery_schedule_id)
+ UNIQUE(store_id,kitchen_id,delivery_date,schedule_id)
 );
 CREATE TABLE store_order_line (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- store_order_id uuid NOT NULL REFERENCES store_order(id) ON DELETE CASCADE,
- product_id uuid NOT NULL REFERENCES product(id),
- qty_requested numeric(18,6) NOT NULL DEFAULT 0 CHECK (qty_requested >= 0),
- UNIQUE (store_order_id, product_id)
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ order_id bigint NOT NULL REFERENCES store_order(id) ON DELETE CASCADE,
+ product_id bigint NOT NULL REFERENCES product(id),
+ qty numeric(18,4) NOT NULL DEFAULT 0 CHECK(qty >= 0),
+ UNIQUE(order_id,product_id)
 );
 CREATE TABLE production_plan (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- production_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ kitchen_id bigint NOT NULL REFERENCES warehouse(id),
  production_date date NOT NULL,
  delivery_date date NOT NULL,
- production_schedule_id uuid NOT NULL REFERENCES production_schedule(id),
- status varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','REVIEWED','PUSHING','PUSHED','PARTIAL','ERROR')),
- revision integer NOT NULL DEFAULT 1,
- finalized_at timestamptz,
- created_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE (production_warehouse_id, production_date, delivery_date, production_schedule_id)
+ schedule_id bigint NOT NULL REFERENCES schedule(id),
+ status varchar(12) NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT','READY','SENT','PARTIAL')),
+ UNIQUE(kitchen_id,production_date,delivery_date,schedule_id)
 );
 CREATE TABLE production_plan_line (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- plan_id uuid NOT NULL REFERENCES production_plan(id) ON DELETE CASCADE,
- product_id uuid NOT NULL REFERENCES product(id),
- bom_id uuid NOT NULL REFERENCES bom_header(id),
- qty_requested numeric(18,6) NOT NULL DEFAULT 0 CHECK (qty_requested >= 0),
- qty_planned numeric(18,6) NOT NULL DEFAULT 0 CHECK (qty_planned >= 0),
- qty_mo numeric(18,6) NOT NULL DEFAULT 0 CHECK (qty_mo >= 0),
- capacity_snapshot numeric(18,6) NOT NULL CHECK (capacity_snapshot >= 0),
- bom_output_snapshot numeric(18,6) NOT NULL CHECK (bom_output_snapshot > 0),
- updated_by uuid REFERENCES app_user(id),
- updated_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE (plan_id, product_id),
- CHECK (qty_mo <= capacity_snapshot)
-);
-CREATE TABLE plan_order_allocation (
- plan_line_id uuid NOT NULL REFERENCES production_plan_line(id) ON DELETE CASCADE,
- store_order_line_id uuid NOT NULL REFERENCES store_order_line(id),
- qty_requested_snapshot numeric(18,6) NOT NULL CHECK (qty_requested_snapshot >= 1),
- PRIMARY KEY (plan_line_id, store_order_line_id)
-);
-CREATE TABLE stock_snapshot (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- product_id uuid NOT NULL REFERENCES product(id),
- location_id uuid NOT NULL REFERENCES stock_location(id),
- available_qty numeric(18,6) NOT NULL,
- captured_at timestamptz NOT NULL DEFAULT now(),
- source varchar(40) NOT NULL DEFAULT 'ODOO'
-);
-CREATE TABLE material_request (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- plan_id uuid NOT NULL UNIQUE REFERENCES production_plan(id),
- source_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- destination_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- status varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','READY','PUSHING','PUSHED','PARTIAL','ERROR')),
- reviewed_by uuid REFERENCES app_user(id),
- reviewed_at timestamptz,
- created_at timestamptz NOT NULL DEFAULT now()
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ plan_id bigint NOT NULL REFERENCES production_plan(id) ON DELETE CASCADE,
+ product_id bigint NOT NULL REFERENCES product(id),
+ qty_requested numeric(18,4) NOT NULL DEFAULT 0 CHECK(qty_requested >= 0),
+ qty_planned numeric(18,4) NOT NULL DEFAULT 0 CHECK(qty_planned >= 0),
+ qty_mo numeric(18,4) NOT NULL DEFAULT 0 CHECK(qty_mo >= 0),
+ batch_qty numeric(18,4) NOT NULL CHECK(batch_qty > 0),
+ capacity_qty numeric(18,4) NOT NULL CHECK(capacity_qty >= 0),
+ bom_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+ UNIQUE(plan_id,product_id),
+ CHECK(qty_mo <= capacity_qty)
 );
 CREATE TABLE material_request_line (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- request_id uuid NOT NULL REFERENCES material_request(id) ON DELETE CASCADE,
- product_id uuid NOT NULL REFERENCES product(id),
- gross_qty numeric(18,6) NOT NULL CHECK (gross_qty >= 0),
- stock_available_snapshot numeric(18,6) NOT NULL DEFAULT 0,
- minimum_qty numeric(18,6) NOT NULL CHECK (minimum_qty >= 0),
- buffer_extra numeric(18,6) NOT NULL DEFAULT 0 CHECK (buffer_extra >= 0),
- requested_qty numeric(18,6) GENERATED ALWAYS AS (minimum_qty + buffer_extra) STORED,
- UNIQUE (request_id, product_id)
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ plan_id bigint NOT NULL REFERENCES production_plan(id) ON DELETE CASCADE,
+ product_id bigint NOT NULL REFERENCES product(id),
+ gross_qty numeric(18,4) NOT NULL DEFAULT 0 CHECK(gross_qty >= 0),
+ stock_qty numeric(18,4) NOT NULL DEFAULT 0,
+ minimum_qty numeric(18,4) NOT NULL DEFAULT 0 CHECK(minimum_qty >= 0),
+ buffer_qty numeric(18,4) NOT NULL DEFAULT 0 CHECK(buffer_qty >= 0),
+ UNIQUE(plan_id,product_id)
 );
-CREATE TABLE distribution_batch (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE packing_allocation (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
  delivery_date date NOT NULL,
- delivery_schedule_id uuid NOT NULL REFERENCES delivery_schedule(id),
- status varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','READY','PUSHING','PUSHED','PARTIAL','ERROR')),
- created_by uuid REFERENCES app_user(id),
- created_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE (delivery_date, delivery_schedule_id)
+ schedule_id bigint NOT NULL REFERENCES schedule(id),
+ store_id bigint NOT NULL REFERENCES warehouse(id),
+ product_id bigint NOT NULL REFERENCES product(id),
+ qty_requested numeric(18,4) NOT NULL DEFAULT 0,
+ qty_allocated numeric(18,4) NOT NULL DEFAULT 0 CHECK(qty_allocated >= 0),
+ UNIQUE(delivery_date,schedule_id,store_id,product_id)
 );
-CREATE TABLE distribution_line (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- batch_id uuid NOT NULL REFERENCES distribution_batch(id) ON DELETE CASCADE,
- store_warehouse_id uuid NOT NULL REFERENCES warehouse(id),
- product_id uuid NOT NULL REFERENCES product(id),
- qty_requested_snapshot numeric(18,6) NOT NULL DEFAULT 0,
- qty_allocated numeric(18,6) NOT NULL DEFAULT 0 CHECK (qty_allocated >= 0),
- updated_by uuid REFERENCES app_user(id),
- UNIQUE (batch_id, store_warehouse_id, product_id)
-);
-CREATE TABLE source_document_counter (
- warehouse_id uuid NOT NULL REFERENCES warehouse(id),
+CREATE TABLE document_counter (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ warehouse_id bigint NOT NULL REFERENCES warehouse(id),
  issue_date date NOT NULL,
- last_value bigint NOT NULL DEFAULT 10000 CHECK (last_value >= 10000),
- PRIMARY KEY (warehouse_id, issue_date)
+ last_value bigint NOT NULL DEFAULT 10000,
+ UNIQUE(warehouse_id,issue_date)
 );
-CREATE TABLE integration_document (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- doc_kind varchar(30) NOT NULL CHECK (doc_kind IN ('MO','MATERIAL_TRANSFER','FINISHED_TRANSFER','PACKAGE_MO','DELIVERY')),
+CREATE TABLE odoo_document (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ kind varchar(24) NOT NULL,
  source_document varchar(100) NOT NULL UNIQUE,
- origin_id uuid NOT NULL,
- odoo_model varchar(120) NOT NULL,
- odoo_record_id bigint,
- sync_status varchar(20) NOT NULL DEFAULT 'PENDING' CHECK (sync_status IN ('PENDING','PROCESSING','SUCCEEDED','FAILED','UNKNOWN')),
- idempotency_key uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
- payload jsonb NOT NULL,
- last_error text,
+ origin_key varchar(180) NOT NULL UNIQUE,
+ odoo_model varchar(100) NOT NULL,
+ odoo_id bigint,
+ state varchar(16) NOT NULL DEFAULT 'PENDING',
+ payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+ error text NOT NULL DEFAULT '',
  created_at timestamptz NOT NULL DEFAULT now(),
- synced_at timestamptz,
- UNIQUE (odoo_model, odoo_record_id)
+ UNIQUE(odoo_model,odoo_id)
 );
-CREATE TABLE integration_attempt (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- integration_document_id uuid NOT NULL REFERENCES integration_document(id),
- attempt_no integer NOT NULL CHECK (attempt_no >= 1),
- started_at timestamptz NOT NULL DEFAULT now(),
- ended_at timestamptz,
- outcome varchar(20) CHECK (outcome IN ('SUCCEEDED','FAILED','UNKNOWN')),
- error_message text,
- UNIQUE (integration_document_id, attempt_no)
+CREATE TABLE audit_log (
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ actor_user_id integer,
+ entity varchar(80) NOT NULL,
+ entity_id varchar(80) NOT NULL,
+ action varchar(40) NOT NULL,
+ changes jsonb NOT NULL DEFAULT '{}'::jsonb,
+ created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE audit_event (
- id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
- actor_id uuid REFERENCES app_user(id),
- entity_type varchar(90) NOT NULL,
- entity_id uuid,
- action varchar(90) NOT NULL,
- before_data jsonb,
- after_data jsonb,
- happened_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_order_status_date ON store_order(status, delivery_date);
-CREATE INDEX idx_order_line_product ON store_order_line(product_id);
-CREATE INDEX idx_plan_schedule ON production_plan(production_date, production_schedule_id);
-CREATE INDEX idx_material_product ON material_request_line(product_id);
-CREATE INDEX idx_distribution_store ON distribution_line(store_warehouse_id);
-CREATE INDEX idx_integration_status ON integration_document(sync_status, created_at);
-CREATE INDEX idx_audit_entity ON audit_event(entity_type, entity_id, happened_at);
+CREATE INDEX idx_store_order_status ON store_order (delivery_date,status);
+CREATE INDEX idx_plan_context ON production_plan (production_date,schedule_id);
+CREATE INDEX idx_odoo_document_state ON odoo_document (state);
 ```
 
-## Aturan yang tidak cukup dijaga oleh CHECK/DDL
-- **Django migration:** jika memakai Django custom user model, selaraskan tabel `app_user` dengan auth backend Django; SQL ini adalah *logical schema draft*, **bukan** instruksi membuat auth table secara manual berdampingan dengan auth Django.
-- **Submit:** lakukan dalam DB transaction: validasi Qty integer ≥1 (jika UoM pcs), hapus baris zero dari order terkirim, set KIRIM/NO_ORDER; gunakan `select_for_update` untuk race manual versus auto.
-- **Auto H-2 07.00 WIB:** scheduler harus idempotent; unique order per store × dapur × delivery date × slot.
-- **Plan:** konsolidasi deterministik dari Kirim, simpan atribusi order-line, revisi dan snapshot output BoM; validasi `qty_mo = ceil(qty_planned/output)*output` di domain service, bukan hanya batas DDL.
-- **Stock planning:** stok dapur snapshot dari Odoo + kurangi yang sudah dialokasikan pada jadwal sebelumnya; hindari double count. Penentuan available vs on-hand, UoM serta rounding masih perlu ditetapkan.
-- **Sumber dokumen:** dalam transaction, atomic upsert counter row per warehouse+tanggal WIB kemudian `UPDATE ... RETURNING last_value`; issue code `WH-YYMMDD-NNNNN`; jangan reuse.
-- **Odoo API:** outbox record disimpan sebelum kirim; periksa remote reference/idempotency sebelum retry saat outcome UNKNOWN. Jangan pernah menyimpulkan gagal hanya karena timeout. Odoo native ID dan source document dicatat.
-- **QA/restore:** restore DB tidak boleh mengirim ulang outbox tanpa rekonsiliasi; backup rahasia/kredensial terpisah; audit tidak bisa diedit dari UI biasa.
-- **MO Paket:** gunakan product kategori PAKET dan lokasi PCK/Packing; BOM Paket tidak menginisiasi MO komponen otomatis.
-- **Source document:** tentukan warehouse pemilik untuk jenis dokumen multi lokasi (open decision).
-- **Kebutuhan lebih lanjut:** versi BoM, historisasi mapping dapur, granularitas distribusi per jadwal versus dapur, snapshot penerimaan Packing, stok WIP/premix, dan inventory/UoM conversion perlu review sebelum migrasi production.
+## Peraturan di service layer, bukan puluhan trigger
+1. **Kirim:** dalam `transaction.atomic()` + `select_for_update()`, hapus baris Qty=0 dan ubah DRAFT→KIRIM, atau NO_ORDER jika kosong. Qty≥1 valid, tidak boleh diedit setelah Kirim.
+2. **Auto-submit:** 07.00 WIB H-2, Celery task idempotent; hanya proses DRAFT.
+3. **Konsolidasi:** agregat hanya dari KIRIM dengan referensi order-line query; simpan snapshot Qty yang menjadi dasar rencana. Revisi plan tidak mengubah order.
+4. **Pembulatan:** `qty_mo = ceil(qty_planned/batch_qty)*batch_qty` (jika qty_planned=0 → 0); validasi max kapasitas sebelum mengirim.
+5. **Material:** BoM komponen langsung dari cache/snapshot Odoo; hitung gross dari qty_mo; `minimum=max(0,gross-stock_available)`; total transfer = minimum + buffer. Alokasi stok antar jadwal tidak boleh dihitung dua kali.
+6. **PAKET:** SKU biasa dengan kategori PAKET dan kitchen=Packing untuk MO; tidak memicu MO turunannya; prioritas alokasi produk komponen Paket di Packing.
+7. **Penomoran:** kunci row `DocumentCounter(warehouse, tanggal_WIB)` dalam transaksi; 10001 pada nomor pertama hari itu; source `KODE-YYMMDD-10001`; tidak boleh reuse.
+8. **Integrasi:** buat `OdooDocument` lokal dulu, lalu background worker mengirim; status PENDING/PROCESSING/SUCCEEDED/FAILED/UNKNOWN. Jika timeout/UNKNOWN, **rekonsiliasi di Odoo sebelum retry**. Jangan mengirim ulang membabi buta. Proses multi-dokumen bisa sukses sebagian.
+9. **Audit:** cukup rekam create/update/submit/replan/push dan before/after utama; tidak perlu event sourcing.
+10. **Stok:** stok resmi hanya dari Odoo; snapshot saat perhitungan dan refresh sebelum push. Hindari query per item ke Odoo untuk 700 SKU.
 
-## Contoh penerbitan counter (pseudocode transaksi)
-```sql
-INSERT INTO source_document_counter (warehouse_id, issue_date, last_value)
-VALUES (:warehouse_id, :today_wib, 10001)
-ON CONFLICT (warehouse_id, issue_date)
-DO UPDATE SET last_value = source_document_counter.last_value + 1
-RETURNING last_value;
-```
-Terbitkan source document memakai kode warehouse yang sudah tersimpan, tanggal WIB dan nilai hasil RETURNING. Uniqueness akhir tetap dijaga oleh `integration_document.source_document`.
-
-> **Catatan:** DDL ini sengaja menggabungkan keputusan bisnis dengan *usulan* representasi database. Review model Django, normalisasi UoM, sinkronisasi dan model Odoo wajib dilakukan sebelum skema dipakai.
+## Deliberate simplifications & catatan review
+- `Product.bom_components` sebagai JSON cache langsung, menghindari tabel per komponen di V1; periksa `bom_odoo_id`/versi cache sebelum push.
+- `Schedule` berisi slot kirim + label produksi; hubungan tanggal produksi dihitung oleh service berdasarkan SOP. Jika kebutuhan slot bertambah kompleks, pisahkan menjadi dua tabel pada migrasi berikutnya.
+- Satu `material_request_line` per SKU per plan; transfer ke Central dapat direpresentasikan per plan yang diarahkan dari CDC ke dapur.
+- `PackingAllocation` menangani Qty toko; rekonsiliasi actual transfer dan status DO memerlukan konfirmasi sebelum fitur packing live.
+- Django migration akan membuat constraint/index sesuai model; SQL ini adalah referensi desain. Jangan menerapkan SQL dan migrations secara paralel.
+- Output per SKU, konversi UoM, product variants/template, handling BoM alternatif, dan cara menentukan `stock_available` Odoo masih perlu verifikasi sebelum integrasi nyata.
+- Batas Draft untuk **DO** masih belum dikonfirmasi, jangan mengotomatisasi konfirmasi DO.
