@@ -142,3 +142,6 @@ Panduan lengkap: [Antrean Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
 
 ### Lihat rekap tanpa keluar dari antrean
 Di Workspace Admin Produksi, tombol **Lihat rekap** membuka pop-up di atas daftar, berisi total SKU/Qty dan rincian asal toko. Tombol **Tutup Rekap**, ikon ×, Escape, atau klik di luar pop-up menutupnya; fokus kembali ke tombol pada baris sebelumnya tanpa mengubah status, filter atau pagination. Interaksi diuji lewat `npm run test --prefix frontend` dalam CI.
+
+### Qty integer dan UoM di Antrean Admin Produksi
+Total Qty integral ditampilkan tanpa empat angka desimal (`1232.0000` → `1.232`). **Satuan SKU berasal dari `Product.uom` hasil sinkronisasi Odoo**; bila kosong, tampil `pcs`. Total pesanan dengan SKU berbeda satuan ditandai **beragam UoM** dan tidak dipaksakan menjadi pcs. Semua ini hanya tampilan dan normalisasi respons API (tanpa migration DB/Odoo write). Lihat [panduan produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
