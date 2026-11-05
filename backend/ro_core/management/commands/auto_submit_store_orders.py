@@ -30,7 +30,13 @@ class Command(BaseCommand):
                 "Penerapan memerlukan --apply dan waktu sudah >= 07:00 WIB."
             ))
         else:
+            if result["invalid_drafts"]:
+                raise CommandError(
+                    f"{result['invalid_drafts']} Draft memiliki Qty tidak valid dan "
+                    "sengaja TIDAK dikirim. Periksa invalid_order_ids dari output "
+                    "JSON lalu koreksi Qty secara manual."
+                )
             self.stdout.write(self.style.SUCCESS(
                 "Auto-submit H-2 selesai. Hanya Draft eligible yang berubah; "
-                "Odoo tidak diubah. Periksa invalid_order_ids bila ada."
+                "Odoo tidak diubah."
             ))
