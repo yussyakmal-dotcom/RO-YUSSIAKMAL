@@ -7,11 +7,11 @@ import { deliveryDateInWib, hasPositiveQty, normalizeQty } from "./utils";
 
 type Busy = "save" | "send" | null;
 
-function StatusBadge({ status }: { status: "DRAFT" | "KIRIM" | "NO_ORDER" }) {
+function StatusBadge({ status, automatic }: { status: "DRAFT" | "KIRIM" | "NO_ORDER"; automatic: boolean }) {
   return (
     <span className={"status-chip " + status.toLowerCase()}>
       <span className="status-dot" />
-      {status === "DRAFT" ? "Draft · Bisa diedit" : status === "KIRIM" ? "Sudah dikirim" : "No Order"}
+      {status === "DRAFT" ? "Draft · Bisa diedit" : status === "KIRIM" ? (automatic ? "Terkirim otomatis" : "Sudah dikirim") : (automatic ? "No Order otomatis" : "No Order")}
     </span>
   );
 }
@@ -385,7 +385,7 @@ function App() {
               <h1>Input Pesanan Toko</h1>
               <p>Daftar SKU otomatis mengikuti template dapur. Anda hanya perlu mengisi Qty.</p>
             </div>
-            {order && <StatusBadge status={order.status} />}
+            {order && <StatusBadge status={order.status} automatic={order.auto_submitted} />}
           </div>
 
           {error && <div className="message error" role="alert"><strong>Perhatian:</strong> {error}</div>}
