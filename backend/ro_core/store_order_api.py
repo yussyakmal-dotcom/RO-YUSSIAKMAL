@@ -145,6 +145,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
         "delivery_date": delivery_date.isoformat(),
         "schedule": schedule.code,
         "status": order.status if order else StoreOrder.Status.DRAFT,
+        "auto_submitted": bool(order.auto_submitted) if order else False,
         "editable": order is None or order.status == StoreOrder.Status.DRAFT,
         "items": items,
     }

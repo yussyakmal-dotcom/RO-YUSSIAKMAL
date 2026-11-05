@@ -1,0 +1,14 @@
+[Unit]
+Description=RO Middleware auto-submit store Drafts H-2 (instance %i)
+Documentation=https://github.com/yussyakmal-dotcom/RO-YUSSIAKMAL/blob/main/docs/AUTO-SUBMIT-H-2.md
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/home/%i/RO-YUSSIAKMAL
+ExecStart=/usr/bin/docker compose exec -T api python manage.py auto_submit_store_orders --apply
+TimeoutStartSec=10min
+StandardOutput=journal
+StandardError=journal
