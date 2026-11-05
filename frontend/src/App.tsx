@@ -73,7 +73,7 @@ const QuantityRow = memo(function QuantityRow({
   );
 });
 
-function LoginPage({ onSuccess }: { onSuccess: (value: SessionInfo) => void }) {
+export function LoginPage({ onSuccess }: { onSuccess: (value: SessionInfo) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -358,6 +358,7 @@ function App() {
           <div className="topbar-title"><strong>RO Middleware</strong><span>Production & Distribution</span></div>
         </div>
         <div className="topbar-right">
+          {session.user.can_access_production && <a className="ghost-btn production-nav-link" href="/produksi/">Admin Produksi</a>}
           <span className="topbar-workspace">Workspace Admin Toko</span>
           <span className="user-initial">{session.user.full_name.slice(0, 1).toUpperCase()}</span>
           <span className="user-name">{session.user.full_name}</span>
