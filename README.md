@@ -145,3 +145,6 @@ Di Workspace Admin Produksi, tombol **Lihat rekap** membuka pop-up di atas dafta
 
 ### Qty integer dan UoM di Antrean Admin Produksi
 Total Qty integral ditampilkan tanpa empat angka desimal (`1232.0000` → `1.232`). **Satuan SKU berasal dari `Product.uom` hasil sinkronisasi Odoo**; bila kosong, tampil `pcs`. Total pesanan dengan SKU berbeda satuan ditandai **beragam UoM** dan tidak dipaksakan menjadi pcs. Semua ini hanya tampilan dan normalisasi respons API (tanpa migration DB/Odoo write). Lihat [panduan produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+### Pengamanan Qty produksi tanpa desimal dan tanpa penjumlahan lintas UoM
+Qty operasional bulat seperti `1.0000` ditampilkan `1`, bukan `1,0000`; angka pecahan historis ditandai **Perlu koreksi Qty** dan tidak dibulatkan. Jika SKU dalam satu order menggunakan satuan berbeda, Qty ditampilkan **per UoM**, bukan dijumlahkan menjadi angka tanpa makna. Contoh `1 Kg · 500 gram`, bukan `501 beragam UoM`. Representasi multi-UoM **untuk SKU yang sama** belum tersedia pada tabel StoreOrderLine (unik per order+product); perlu desain lanjutan agar setara model Odoo. Baca [panduan Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
