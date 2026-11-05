@@ -58,7 +58,7 @@ const recap: ProductionDemand = {
   note: "Baca saja",
   summary: {
     stores_total: 2, stores_sent: 2, stores_in_production: 0,
-    sku_count: 1, qty_total: "1645", qty_uom: "pcs", qty_uom: "pcs",
+    sku_count: 1, qty_total: "1645", qty_uom: "pcs",
   },
   store_statuses: [],
   items: [{
