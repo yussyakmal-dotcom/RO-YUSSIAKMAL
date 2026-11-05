@@ -45,6 +45,8 @@ jobs:
         run: npm install --no-audit --no-fund --prefix frontend
       - name: Build React frontend
         run: npm run build --prefix frontend
+      - name: Test recap modal interaction and focus return
+        run: npm run test --prefix frontend
       - name: Verify Django served React asset paths
         run: |
           grep -q '/static/frontend/assets/' frontend/dist/index.html
