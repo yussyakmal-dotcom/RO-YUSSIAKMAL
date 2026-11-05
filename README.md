@@ -2,7 +2,7 @@
 
 Aplikasi input dan konsolidasi produk, bahan, produksi, dan distribusi. Odoo tetap sumber kebenaran stok dan transaksi.
 
-Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md) · [Frontend Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md)
+Dokumentasi: [PRD](docs/PRD.md) · [DDL](docs/DDL.md) · [Django Models](docs/DJANGO-MODELS.md) · [Decision Log](docs/DECISION-LOG.md) · [Odoo Connector](docs/ODOO-CONNECTOR.md) · [Template Pemesanan](docs/TEMPLATE-PEMESANAN.md) · [Draft/Kirim](docs/ADMIN-TOKO-DRAFT-KIRIM.md) · [Frontend Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md) · [Auto-submit H-2](docs/AUTO-SUBMIT-H-2.md)
 
 ## Jalankan pengembangan lokal
 
@@ -91,3 +91,14 @@ Jangan commit .env, credential Odoo, file backup. Hindari `docker compose down -
 
 ## Qty integer pada Workspace Admin Toko
 Qty input pesanan toko menerima **hanya bilangan bulat**: `0, 1, 2, ...`. Tidak boleh desimal. Draft tetap dapat dibuka dan diedit, Kirim hanya memproses Qty ≥1, semua nol → No Order. Validasi juga dilakukan server-side, dan tidak ada perubahan/migration DB untuk aturan ini.
+
+## Auto-submit H-2 pukul 07.00 WIB (backend + timer opsional)
+
+Perintah default adalah **preview tanpa perubahan**:
+```bash
+docker compose exec api python manage.py auto_submit_store_orders
+```
+
+Setelah preview, sistem dapat dijadwalkan pukul **07:00 WIB** menggunakan template **systemd timer** di `deploy/systemd/`. Timer **tidak otomatis aktif setelah git pull atau Docker rebuild**; pemasangan dan aktivasi memerlukan langkah eksplisit pada Debian. Setelah diaktifkan, `--apply` hanya memfinalisasi Draft yang sudah ada untuk tanggal kirim H+2: Qty integer ≥ 1 → KIRIM, semuanya nol → NO_ORDER, lalu terkunci dan dicatat audit. Tidak membuat MO maupun menulis Odoo.
+
+**Peringatan operasional:** Draft yang baru dibuat setelah run 07:00 belum dicegah/diproses ulang; kebijakan input terlambat masih perlu ditetapkan sebelum dijadikan sistem tanpa pengawasan. Baca [panduan timer dan batas V1](docs/AUTO-SUBMIT-H-2.md) sebelum mengaktifkan jadwal.
