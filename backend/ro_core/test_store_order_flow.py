@@ -94,8 +94,8 @@ class StoreOrderFlowTests(TestCase):
 
         reopened = self.client.get(self.form_url, self.context()).json()
         by_sku = {row["sku"]: row["qty"] for row in reopened["items"]}
-        self.assertEqual(by_sku["10005"], "3.0000")
-        self.assertEqual(by_sku["10006"], "1.0000")
+        self.assertEqual(by_sku["10005"], "3")
+        self.assertEqual(by_sku["10006"], "1")
         self.assertEqual(by_sku["10007"], "0")
 
         edited = self.save([
@@ -124,24 +124,75 @@ class StoreOrderFlowTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(action="SAVE_DRAFT").exists())
         self.assertEqual(AuditLog.objects.filter(action="KIRIM").count(), 1)
 
-    def test_only_qty_at_least_one_is_sent(self):
+    def test_integer_qty_one_is_valid_and_zero_excluded(self):
         self.client.force_login(self.user)
         saved = self.save([
-            {"product_id": self.products[0].id, "qty": "0.5000"},
-            {"product_id": self.products[1].id, "qty": "1.0000"},
-            {"product_id": self.products[2].id, "qty": "0"},
+            {"product_id": self.products[0].id, "qty": "0"},
+            {"product_id": self.products[1].id, "qty": "1"},
+            {"product_id": self.products[2].id, "qty": "2"},
         ])
-        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.status_code, 200, saved.content)
         order_id = saved.json()["id"]
-        result = self.client.post(
-            reverse("store-order-send", args=[order_id]), {}, content_type="application/json"
+        sent = self.client.post(
+            reverse("store-order-send", args=[order_id]),
+            {}, content_type="application/json",
         )
-        self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.json()["items_sent"], 1)
-        self.assertEqual(result.json()["excluded_below_one"], 1)
+        self.assertEqual(sent.status_code, 200)
+        self.assertEqual(sent.json()["status"], "KIRIM")
+        self.assertEqual(sent.json()["items_sent"], 2)
         self.assertEqual(
-            StoreOrderLine.objects.get(order_id=order_id).product_id,
-            self.products[1].id,
+            sorted(int(line.qty) for line in StoreOrderLine.objects.filter(order_id=order_id)),
+            [1, 2],
+        )
+
+    def test_decimal_and_noninteger_qty_rejected_even_via_api(self):
+        self.client.force_login(self.user)
+        for value in ["0.5", "1.5", "1.0", "-1", "1e2", "2,5", 2.5, True, "abc"]:
+            response = self.save([
+                {"product_id": self.products[0].id, "qty": value}
+            ])
+            self.assertEqual(response.status_code, 400, f"{value!r}: {response.content}")
+        self.assertFalse(StoreOrder.objects.exists())
+
+    def test_integer_quantity_limit_and_leading_zeroes(self):
+        self.client.force_login(self.user)
+        excessive = self.save([
+            {"product_id": self.products[0].id, "qty": "100000000000000"}
+        ])
+        self.assertEqual(excessive.status_code, 400)
+        valid = self.save([
+            {"product_id": self.products[0].id, "qty": "0002"}
+        ])
+        self.assertEqual(valid.status_code, 200, valid.content)
+        reopened = self.client.get(self.form_url, self.context()).json()
+        self.assertEqual(reopened["items"][0]["qty"], "2")
+
+    def test_old_fractional_draft_must_be_corrected_before_send(self):
+        self.client.force_login(self.user)
+        order = StoreOrder.objects.create(
+            store=self.store, kitchen=self.kitchen, order_date="2026-11-05",
+            delivery_date="2026-11-07", schedule=self.schedule
+        )
+        StoreOrderLine.objects.create(
+            order=order, product=self.products[0], qty=Decimal("1.5000")
+        )
+        url = reverse("store-order-send", args=[order.id])
+        response = self.client.post(url, {}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "DRAFT")
+        self.assertEqual(order.lines.get().qty, Decimal("1.5"))
+        self.assertEqual(
+            self.client.get(self.form_url, self.context()).json()["items"][0]["qty"],
+            "1.5000",
+        )
+        fixed = self.save([
+            {"product_id": self.products[0].id, "qty": "2"}
+        ])
+        self.assertEqual(fixed.status_code, 200, fixed.content)
+        self.assertEqual(
+            self.client.post(url, {}, content_type="application/json").status_code,
+            200,
         )
 
     def test_all_zero_becomes_no_order(self):
@@ -189,7 +240,7 @@ class StoreOrderFlowTests(TestCase):
         assignment.save(update_fields=["is_active"])
         opened = self.client.get(self.form_url, self.context()).json()
         historic = [row for row in opened["items"] if row["sku"] == "10005"]
-        self.assertEqual(historic[0]["qty"], "6.0000")
+        self.assertEqual(historic[0]["qty"], "6")
         self.assertFalse(historic[0]["active_in_template"])
         # Existing Draft quantity can be edited or cleared despite template changes.
         self.assertEqual(

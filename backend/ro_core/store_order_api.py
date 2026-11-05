@@ -5,6 +5,7 @@ order. Product lists come from the kitchen's manually maintained template,
 not from Odoo Product Category.
 """
 from decimal import Decimal
+import re
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -28,11 +29,35 @@ class OrderContextSerializer(serializers.Serializer):
     schedule_code = serializers.CharField(max_length=40)
 
 
+class WholeNumberQtyField(serializers.Field):
+    """Store order quantity: non-negative integer only, max 14 digits.
+
+    The existing PostgreSQL Decimal(18,4) column accommodates the same range;
+    this rule affects *store ordering*, not fractional ingredients/UoM in Odoo.
+    """
+    default_error_messages = {
+        "integer": "Qty harus bilangan bulat (0, 1, 2, ...) tanpa desimal.",
+        "large": "Qty terlalu besar (maksimal 14 digit).",
+    }
+
+    def to_internal_value(self, value):
+        if isinstance(value, bool) or not isinstance(value, (str, int)):
+            self.fail("integer")
+        text = str(value).strip()
+        if not re.fullmatch(r"[0-9]+", text):
+            self.fail("integer")
+        significant = text.lstrip("0") or "0"
+        if len(significant) > 14:
+            self.fail("large")
+        return Decimal(significant)
+
+    def to_representation(self, value):
+        return int(value)
+
+
 class OrderItemSerializer(serializers.Serializer):
     product_id = serializers.IntegerField(min_value=1)
-    qty = serializers.DecimalField(
-        max_digits=18, decimal_places=4, min_value=Decimal("0"),
-    )
+    qty = WholeNumberQtyField()
 
 
 class SaveDraftSerializer(OrderContextSerializer):
@@ -70,6 +95,11 @@ def _order_identity(store, kitchen, delivery_date, schedule):
     )
 
 
+def _qty_text(qty):
+    """Normalize existing integral Decimal rows, preserve legacy fractions for correction."""
+    return str(int(qty)) if qty == qty.to_integral_value() else str(qty)
+
+
 def _order_payload(order, store, kitchen, delivery_date, schedule):
     active_assignments = list(
         ProductionAssignment.objects.filter(
@@ -91,7 +121,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
             "product_id": entry.product_id,
             "sku": entry.product.sku,
             "name": entry.product.name,
-            "qty": str(existing_lines.get(entry.product_id).qty)
+            "qty": _qty_text(existing_lines.get(entry.product_id).qty)
             if entry.product_id in existing_lines else "0",
             "active_in_template": True,
         }
@@ -105,7 +135,7 @@ def _order_payload(order, store, kitchen, delivery_date, schedule):
                 "product_id": product_id,
                 "sku": line.product.sku,
                 "name": line.product.name,
-                "qty": str(line.qty),
+                "qty": _qty_text(line.qty),
                 "active_in_template": False,
             })
     return {
@@ -217,6 +247,16 @@ def send_store_order(request, order_id):
                 {"detail": "Pesanan sudah diproses dan tidak dapat dikirim ulang."},
                 status=status.HTTP_409_CONFLICT,
             )
+        # Old Drafts may predate integer-only validation. Never silently
+        # truncate or submit their fractional quantities.
+        if any(
+            line.qty != line.qty.to_integral_value()
+            for line in order.lines.all()
+        ):
+            raise ValidationError({
+                "qty": "Draft memiliki Qty desimal dari versi sebelumnya. "
+                       "Buka dan ubah Qty menjadi bilangan bulat sebelum Kirim."
+            })
         removed = order.lines.filter(qty__lt=Decimal("1")).delete()[0]
         item_count = order.lines.count()
         order.status = (

@@ -45,11 +45,17 @@ const QuantityRow = memo(function QuantityRow({
               aria-label={"Qty " + item.name}
               className={"qty-input " + (belowOne ? "qty-below" : "")}
               type="text"
-              inputMode="decimal"
+              inputMode="numeric"
+              pattern="[0-9]*"
               autoComplete="off"
               spellCheck={false}
               value={value}
-              onChange={(event) => onChange(item.product_id, event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next === "" || /^\d{0,14}$/.test(next)) {
+                  onChange(item.product_id, next);
+                }
+              }}
               onFocus={(event) => event.currentTarget.select()}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -205,7 +211,7 @@ function App() {
   const items = useMemo(() => {
     if (!order) return [];
     // Sent orders show exactly the lines that were sent, rather than 700 zero rows.
-    if (!order.editable) return order.items.filter((item) => hasPositiveQty(item.qty));
+    if (!order.editable) return order.items.filter((item) => Number(item.qty) >= 1);
     return order.items;
   }, [order]);
   const visibleItems = useMemo(() => {
@@ -262,7 +268,7 @@ function App() {
   const save = async () => {
     if (!order || !order.editable || busy) return;
     if (hasInvalid) {
-      setError("Periksa Qty. Gunakan angka tidak negatif, maksimal 4 angka desimal.");
+      setError("Qty harus bilangan bulat 0, 1, 2, ... tanpa desimal (maksimal 14 digit).");
       return;
     }
     setBusy("save");
@@ -284,7 +290,7 @@ function App() {
   const send = async () => {
     if (!order || !order.editable || busy) return;
     if (hasInvalid) {
-      setError("Periksa Qty yang belum valid sebelum mengirim pesanan.");
+      setError("Periksa Qty: hanya bilangan bulat tanpa desimal yang dapat dikirim.");
       return;
     }
     const question = productCount === 0
@@ -419,7 +425,7 @@ function App() {
               <section className="summary-grid">
                 <div className="summary-box"><span>SKU dalam template</span><strong>{items.length.toLocaleString("id-ID")}</strong><small>{chosenKitchen?.name ?? "Dapur"}</small></div>
                 <div className="summary-box"><span>SKU dengan Qty ≥ 1</span><strong>{productCount.toLocaleString("id-ID")}</strong><small>Siap ikut Kirim</small></div>
-                <div className="summary-box"><span>Total Qty diisi</span><strong>{totalQty.toLocaleString("id-ID", { maximumFractionDigits: 4 })}</strong><small>Perhitungan sementara</small></div>
+                <div className="summary-box"><span>Total Qty diisi</span><strong>{totalQty.toLocaleString("id-ID", { maximumFractionDigits: 0 })}</strong><small>Perhitungan sementara</small></div>
               </section>
 
               <section className="card order-card">

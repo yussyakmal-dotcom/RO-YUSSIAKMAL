@@ -217,3 +217,6 @@ ALTER TABLE ro_core_productionassignment
 Perubahan di atas adalah **referensi DDL**, dijalankan oleh **Django migrations**, bukan SQL manual. `ProductionAssignment.product_id` tetap unik untuk mencegah SKU ditugaskan ke lebih dari satu dapur.
 
 Aturan: `is_active=false` berarti SKU tidak ditampilkan di template pemesanan baru; **jangan** mengubah `Product.active` yang berasal dari Odoo dan jangan hapus histori permintaan toko. Urutkan per dapur dengan `sort_order` lalu nama SKU. Tidak menambahkan tabel `OrderTemplate` atau duplikasi SKU/qty.
+
+## Aturan input Qty toko — 2026-11-05
+Input `StoreOrderLine.qty` pada UI/API harus **bilangan bulat nonnegatif** (0, 1, 2, …). **Tidak diperlukan migrasi baru:** kolom `numeric(18,4)` yang sudah ada masih menyimpan integer secara presisi; API menjadi penjaga validasi. Nilai desimal historis dalam Draft harus dikoreksi sebelum Kirim, bukan dibulatkan otomatis. Qty bahan baku/BoM tidak mengikuti pembatasan integer ini.
