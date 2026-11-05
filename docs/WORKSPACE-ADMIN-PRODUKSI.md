@@ -72,3 +72,14 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 - Isi modal memiliki scroll sendiri agar halaman antrean tetap pada posisi semula.
 - Ketika modal ditutup, fokus kembali ke tombol `Lihat rekap` pada baris yang sama; tidak reload antrean, tidak mengubah halaman pagination atau filter.
 - Modal hanya membaca API rekap yang sudah ada; tidak mengubah status dan tidak menjalankan konsolidasi.
+
+## Format Qty integer dan satuan produk (6 November 2026)
+- Nilai kuantitas dari PostgreSQL bisa berbentuk `1232.0000` karena tipe `Decimal(18,4)`, walaupun pesanan toko **selalu integer**. Tampilan Admin Produksi sekarang memformatnya menjadi **1.232**, bukan `1232.0000`. Baris `120.0000` menjadi **120**. Tidak ada pembulatan otomatis untuk anomali pecahan historis.
+- **UoM per SKU dibaca dari master produk middleware `Product.uom`, yang sudah disinkronkan read-only dari Odoo `product.product.uom_id`.** Jika UoM master kosong, tampilkan label sementara **pcs**.
+- Di modal rekap, setiap SKU dan rincian permintaan toko menampilkan Qty dan **satuan produk yang sama**. Contoh `120 Lusin` bila master menyebut Lusin; `120 pcs` bila master kosong.
+- Total Qty pada daftar pesanan hanya diberi satuan tunggal bila seluruh SKU punya UoM yang sama. Jika satu pesanan berisi campuran UoM berbeda, UI menampilkan **beragam UoM** agar tidak mengasumsikan semuanya pcs.
+- Perbaikan ini **tidak menambahkan migrasi**, tidak mengubah data pesanan, template, master Odoo, atau status. API menormalkan Qty integral ke string integer; Qty pecahan lama tetap terlihat dan rekap per SKU tetap memvalidasi integritas.
+- Verifikasi UoM asli SKU tertentu pada database Debian (read-only):
+  ```bash
+  docker compose exec api python manage.py shell -c "from ro_core.models import Product; print(list(Product.objects.filter(sku='10005').values('sku','name','uom')))"
+  ```

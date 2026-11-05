@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import ProductionRecapModal from "./ProductionRecapModal";
+import { productionQtyLabel } from "./productionQty";
 import { LoginPage } from "./App";
 import {
   initializeSession, loadProductionDemand, loadProductionInbox, logout,
   type ProductionDemand, type ProductionInbox, type ProductionInboxFilter,
   type ProductionInboxOrder, type SessionInfo,
 } from "./api";
-
-function units(value: string): string {
-  try { return new Intl.NumberFormat("id-ID").format(BigInt(value)); }
-  catch { return value; }
-}
 
 function ProductionApp() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -203,7 +199,7 @@ function ProductionApp() {
                               <td>{order.delivery_date}</td>
                               <td>{order.kitchen_name}</td>
                               <td>{order.schedule_name}</td>
-                              <td><strong>{order.sku_count} SKU</strong><small>{units(order.qty_total)} unit</small></td>
+                              <td><strong>{order.sku_count} SKU</strong><small>{productionQtyLabel(order.qty_total, order.qty_uom)}</small></td>
                               <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
                               <td><button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button></td>
                             </tr>
