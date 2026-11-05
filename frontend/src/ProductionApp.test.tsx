@@ -36,14 +36,14 @@ const inbox: ProductionInbox = {
       order_id: 1, status: "KIRIM", store_code: "T_BAN",
       store_name: "Toko Bandara", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
-      schedule_name: "Subuh", sku_count: 18, qty_total: "1232.0000", qty_uom: "pcs",
+      schedule_name: "Subuh", sku_count: 18, qty_total: "1232.0000", qty_uom: "pcs", qty_by_uom: [{uom:"pcs",qty:"1232"}], qty_invalid:false,
       auto_submitted: false,
     },
     {
       order_id: 2, status: "KIRIM", store_code: "T_KD",
       store_name: "Toko Kedaton", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
-      schedule_name: "Subuh", sku_count: 6, qty_total: "413.0000", qty_uom: "pcs",
+      schedule_name: "Subuh", sku_count: 6, qty_total: "413.0000", qty_uom: "pcs", qty_by_uom: [{uom:"pcs",qty:"413"}], qty_invalid:false,
       auto_submitted: false,
     },
   ],
@@ -58,7 +58,7 @@ const recap: ProductionDemand = {
   note: "Baca saja",
   summary: {
     stores_total: 2, stores_sent: 2, stores_in_production: 0,
-    sku_count: 1, qty_total: "1645", qty_uom: "pcs",
+    sku_count: 1, qty_total: "1645", qty_uom: "pcs", qty_by_uom: [{uom:"pcs",qty:"1645"}], qty_invalid:false,
   },
   store_statuses: [],
   items: [{
@@ -103,7 +103,7 @@ describe("Admin Produksi rekap modal", () => {
   it("formats decimal-zero Qty as integers and displays original product UoM", async () => {
     vi.mocked(loadProductionDemand).mockResolvedValue({
       ...recap,
-      summary: { ...recap.summary, qty_total: "120.0000", qty_uom: "Lusin" },
+      summary: { ...recap.summary, qty_total: "120.0000", qty_uom: "Lusin", qty_by_uom: [{uom:"Lusin",qty:"120"}] },
       items: [{
         ...recap.items[0], uom: "Lusin", qty_total: "120.0000",
         sources: [{ ...recap.items[0].sources[0], qty: "120.0000" }],
@@ -122,11 +122,24 @@ describe("Admin Produksi rekap modal", () => {
   it("does not pretend a mixed-UoM order has a single pcs unit", async () => {
     vi.mocked(loadProductionInbox).mockResolvedValue({
       ...inbox,
-      items: [{ ...inbox.items[0], qty_uom: null }],
+      items: [{ ...inbox.items[0], qty_total: null, qty_uom: null, qty_by_uom: [{uom:"Kg",qty:"1"},{uom:"gr",qty:"500"}] }],
     });
     render(<ProductionApp />);
-    await screen.findByText("1.232 beragam UoM");
+    await screen.findByText("1 Kg · 500 gr");
     expect(screen.queryByText("1.232 pcs")).toBeNull();
+  });
+
+  it("shows a correction warning, not a dangerous decimal value, for historical fractions", async () => {
+    vi.mocked(loadProductionInbox).mockResolvedValue({
+      ...inbox,
+      items: [{
+        ...inbox.items[0], qty_total: null, qty_uom: null,
+        qty_by_uom: [], qty_invalid: true,
+      }],
+    });
+    render(<ProductionApp />);
+    await screen.findByText("Perlu koreksi Qty");
+    expect(screen.queryByText("1,5000")).toBeNull();
   });
 
   it("keeps the inbox in place, renders scope recap, and restores focus on close", async () => {
