@@ -11,10 +11,10 @@ cp .env.example .env
 # Edit .env: ganti DJANGO_SECRET_KEY dan POSTGRES_PASSWORD
 docker compose up --build -d
 docker compose exec api python manage.py createsuperuser
-curl http://127.0.0.1:8000/health/
+curl http://127.0.0.1:900/health/
 ```
 
-Django Admin: http://127.0.0.1:8000/admin/. Service default hanya dibuka di localhost; PostgreSQL tidak diekspos ke host.
+Django Admin: http://127.0.0.1:900/admin/. Service default hanya dibuka di localhost; PostgreSQL tidak diekspos ke host.
 
 ```bash
 docker compose exec api python manage.py check
