@@ -1,0 +1,11 @@
+[Unit]
+Description=RO Middleware daily H-2 Draft cutoff at 07:00 WIB
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Asia/Jakarta
+Persistent=true
+AccuracySec=1s
+Unit=ro-auto-submit@%i.service
+
+[Install]
+WantedBy=timers.target
