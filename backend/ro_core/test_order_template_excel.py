@@ -109,7 +109,7 @@ class KitchenTemplateTests(TestCase):
 
     def test_invalid_xlsx_is_validation_error_not_server_error(self):
         fake = SimpleUploadedFile("broken.xlsx", b"not-a-zip-file")
-        with self.assertRaisesMessage(ValueError, "tidak valid"):
+        with self.assertRaisesMessage(ValueError, "yang valid"):
             preview_xlsx(self.pastry, fake)
 
     def test_active_flag_does_not_change_master_product(self):
