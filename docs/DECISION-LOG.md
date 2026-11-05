@@ -104,3 +104,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-007 (❓ tenant validation):** Model/field API di Odoo 19 sebenarnya, tipe BoM Paket, dan sumber awal mapping SKU→dapur tetap harus diverifikasi menggunakan /doc Odoo serta akses bot read-only.
 - **I-008 (🚧 status):** Pengujian unit CI memakai data tiruan; koneksi tenant Odoo belum dilakukan dan membutuhkan pengaturan rahasia hanya di .env server lokal.
 - Petunjuk: [Odoo Connector](./ODOO-CONNECTOR.md).
+
+## Validasi operasional — 2026-11-05
+- **I-009 (✅ tenant nyata):** Pengguna menjalankan `odoo_probe` dan `odoo_sync_master --apply` pada server Debian; koneksi Odoo 19 JSON-2 berhasil.
+- Hasil nyata: **19/19 warehouse**, **19/19 lokasi**, **2.553 produk**, **957 record BoM**, **0 kandidat BoM ambigu**; master berhasil disimpan di PostgreSQL middleware.
+- **I-010 (❓ tahapan berikutnya):** Initial mapping SKU→dapur belum terisi/dikonfirmasi oleh hasil impor ini; perlu menentukan sumber mapping di Odoo sebelum Workspace Admin Toko memfilter katalog per dapur.
+- Tidak ada bukti dalam hasil ini bahwa 957 BoM mewakili seluruh SKU, stok live sudah sinkron, atau API transaksi MO/DO sudah siap.
+- Lihat [hasil verifikasi connector](./ODOO-CONNECTOR.md#verifikasi-tenant-nyata--2026-11-05).
