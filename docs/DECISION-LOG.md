@@ -171,3 +171,12 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-031 (✅ display integer):** Nilai basis data `78.0000` adalah bilangan bulat 78, jadi Django Admin menampilkan `78`; nilai historis pecahan ditandai untuk koreksi, tidak dibulatkan diam-diam.
 - **I-032 (✅ pengamanan):** Halaman `Store orders` dan `Store order lines` di Django Admin menjadi **read-only**; tidak boleh add/edit/delete melalui admin agar keputusan Draft/Kirim dan validasi integer tidak bisa dilewati. Operator memakai Workspace Admin Toko untuk edit Draft.
 - **Tidak ada migration:** Struktur PostgreSQL tetap sama dan aturan integer pada API tidak berubah.
+
+## Implementasi Admin Produksi — Rekap Kebutuhan tahap awal (2026-11-06)
+- **I-033 (✅ rekap read-only):** Endpoint `/api/v1/production/demand/` mengagregasi hanya **StoreOrder status KIRIM** untuk tanggal kirim, dapur, dan jadwal kirim terpilih. Menampilkan SKU, Qty total, dan asal per toko/order.
+- **I-034 (✅ kejelasan status):** Toko yang `DRAFT`, `NO_ORDER`, atau belum membuat pesanan ditampilkan terpisah untuk meminimalkan salah interpretasi; ketiganya tidak masuk Qty rekap.
+- **I-035 (✅ RBAC/UI):** Workspace React `/produksi/` khusus Group `PRODUCTION`, `ADMIN`, dan superuser; Group STORE tidak bisa membaca API produksi. Login memakai sesi Django yang sama di port 900.
+- **I-036 (✅ integritas):** Rekap tidak menyaring SKU final berdasarkan flag template aktif saat ini; perubahan template tidak mengubah permintaan final. Data KIRIM historis yang Qty pecahan/nol memicu error 409 agar tidak dibulatkan diam-diam.
+- **O-016 (❓ terbuka):** Penetapan `production_date` dan `production_schedule` dari tanggal/jadwal kirim, terutama produksi yang melewati tengah malam, harus dikonfirmasi sebelum membuat ProductionPlan. API rekap saat ini `production_date = null`.
+- **I-037 (✅ batas):** Tahap ini hanya melihat kebutuhan SKU, **belum** memutuskan Qty produksi, pembulatan batch, kapasitas, stok bahan, atau MO Draft. Masalah auto-submit late Draft (O-014) tetap belum diselesaikan.
+- Rujukan: [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
