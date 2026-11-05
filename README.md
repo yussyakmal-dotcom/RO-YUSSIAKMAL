@@ -109,42 +109,37 @@ Menu **Store orders** dan **Store order lines** pada `/admin/` adalah halaman **
 
 **Jangan mengubah pesanan lewat Django Admin.** Draft diubah pada `/toko/`; setelah Kirim atau NO_ORDER datanya terkunci. Kolom PostgreSQL tetap Decimal(18,4) demi kompatibilitas, tetapi UI/API toko tetap menerima Qty integer saja. Tidak ada migration database untuk perbaikan tampilan ini.
 
-## Workspace Admin Produksi — Rekap Kebutuhan (tahap awal)
+## Workspace Admin Produksi — Antrean dan Rekap (implementasi saat ini)
 
-**http://localhost:900/produksi/** — login superuser/ADMIN atau akun Group **PRODUCTION**. Menampilkan rekap permintaan final **KIRIM** dari seluruh toko per **tanggal kirim × dapur × jadwal kirim × SKU**, termasuk rincian Qty per toko. Draft, NO_ORDER, dan toko yang belum membuat pesanan tidak dihitung; status masing-masing tetap ditampilkan.
+Buka **http://localhost:900/produksi/** dengan akun Group `PRODUCTION`, `ADMIN`, atau superuser.
 
-API read-only: `GET /api/v1/production/demand/?delivery_date=2026-11-08&kitchen_code=JP&schedule_code=SUBUH` (Session auth + permission Admin Produksi). Belum membuat ProductionPlan/MO dan belum mengubah Odoo. **Tanggal produksi tidak ditebak dari tanggal kirim** sebelum SOP-nya dipastikan. [Panduan rekap](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+- Halaman pertama menampilkan **seluruh pesanan KIRIM dan PROSES_PRODUKSI**, lintas tanggal/dapur/jadwal, dengan tab **Semua / Kirim / Proses Produksi** dan pagination 50 order.
+- **DRAFT**, **NO_ORDER**, dan toko yang belum membuat order **tidak ditampilkan** kepada Admin Produksi.
+- Tombol **Lihat rekap** membuka pop-up baca-saja yang menunjukkan Qty per SKU dan asal toko pada dapur × tanggal kirim × jadwal kirim yang sama. Klik **Tutup Rekap**, ×, atau Esc untuk kembali fokus ke baris semula tanpa mengubah filter/posisi daftar.
+- **Qty operasional hanya ditampilkan sebagai angka bulat** tanpa ekor `.0000`. Qty historis pecahan diberi peringatan **Perlu koreksi Qty**, bukan dibulatkan. UoM berasal dari `Product.uom` hasil sync Odoo (fallback **pcs** bila kosong). SKU dengan UoM berbeda tidak dijumlahkan sebagai satu angka: tampilkan subtotal per UoM.
+- Admin Produksi **belum bisa menyimpan konsolidasi ProductionPlan, mengubah status menjadi PROSES_PRODUKSI lewat UI, atau membuat MO/transfer Odoo**. Lihat rekap tidak dianggap tindakan produksi.
 
+API read-only:
+```text
+GET /api/v1/production/orders/?status=ALL&page=1
+GET /api/v1/production/demand/?delivery_date=2026-11-07&kitchen_code=JP&schedule_code=SUBUH
+```
+
+Endpoint lama `/api/v1/production/recent-orders/` masih tersedia untuk kompatibilitas tetapi **bukan** sumber UI utama. Status PROSES_PRODUKSI dan migration 0003 telah tersedia, namun perpindahan status otomatis baru dilakukan setelah proses konsolidasi nyata dibangun.
+
+Panduan: [Workspace Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Milestone berikutnya — Kontrak Konsolidasi Produksi V1
+
+**Keputusan bisnis terbaru (2026-11-06): tanggal produksi ditentukan manual oleh Admin Produksi**, bukan dihitung H-1/H-2 atau diisi otomatis menurut jadwal kirim. Untuk lingkup `JP / SUBUH / kirim 2026-11-07`, operator memilih tanggal produksinya sendiri sebelum simpan.
+
+Dokumen desain berikutnya: **[Kontrak Bisnis Konsolidasi Produksi V1](docs/KONTRAK-KONSOLIDASI-PRODUKSI-V1.md)**. Kontrak mencakup sumber hanya order KIRIM, Qty Requested → Planned, audit, pelacakan order asal, anti-duplikasi, transaksi atomik dan status menjadi PROSES_PRODUKSI setelah rencana tersimpan. **Masih dokumen review; belum ada implementasi penyimpanan.** Keputusan tentang pembagian lingkup ke beberapa tanggal produksi, Qty Planned = 0/default, pesanan terlambat, dan jadwal produksi masih terbuka.
+
+Untuk menyegarkan aplikasi di Debian **hanya setelah ada perubahan kode yang sudah di-merge**:
 ```bash
+cd ~/RO-YUSSIAKMAL
 git pull origin main
 docker compose up -d --build --force-recreate api
 ```
 
-### Jika pesanan KIRIM tidak muncul di rekap produksi
-
-Buka `http://localhost:900/produksi/` dan panel **Temukan Pesanan yang Sudah Kirim**. Daftar ini menampilkan pesanan KIRIM terbaru lintas tanggal, dapur, dan jadwal. Klik **Lihat rekap** agar ketiga filter sesuai dengan pesanan tersebut. **Tanggal awal H+2 bukan otomatis tanggal Kirim terakhir.** Jika tidak ada di 30 pesanan terbaru, cek Django Admin → Store orders.
-
-API pendukung (auth PRODUCTION/ADMIN, read-only): `GET /api/v1/production/recent-orders/`. Tidak ada migrasi atau perubahan data pesanan. Baca [panduan rekap](docs/WORKSPACE-ADMIN-PRODUKSI.md).
-
-## Antrean Admin Produksi yang diperbaiki (November 2026)
-
-Buka `http://localhost:900/produksi/`: langsung tampil **seluruh StoreOrder status KIRIM dan PROSES_PRODUKSI**, lintas tanggal/dapur/jadwal. Tersedia tab Semua / Kirim / Proses Produksi dan pagination 50 pesanan. **Draft dan No Order tidak muncul.** Klik Lihat rincian untuk rekap SKU/toko pada tanggal/dapur/jadwal pesanan.
-
-API: `GET /api/v1/production/orders/?status=ALL&page=1` (PRODUCTION/ADMIN). `PROSES_PRODUKSI` memerlukan migration 0003; pesanan existing tidak otomatis berubah status. **Transisi status akan dilakukan hanya saat penyimpanan konsolidasi ProductionPlan diimplementasikan**, bukan dengan sekadar membuka rekap.
-
-```bash
-git pull origin main
-docker compose up -d --build --force-recreate api
-docker compose exec api python manage.py migrate --noinput
-```
-
-Panduan lengkap: [Antrean Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
-
-### Lihat rekap tanpa keluar dari antrean
-Di Workspace Admin Produksi, tombol **Lihat rekap** membuka pop-up di atas daftar, berisi total SKU/Qty dan rincian asal toko. Tombol **Tutup Rekap**, ikon ×, Escape, atau klik di luar pop-up menutupnya; fokus kembali ke tombol pada baris sebelumnya tanpa mengubah status, filter atau pagination. Interaksi diuji lewat `npm run test --prefix frontend` dalam CI.
-
-### Qty integer dan UoM di Antrean Admin Produksi
-Total Qty integral ditampilkan tanpa empat angka desimal (`1232.0000` → `1.232`). **Satuan SKU berasal dari `Product.uom` hasil sinkronisasi Odoo**; bila kosong, tampil `pcs`. Total pesanan dengan SKU berbeda satuan ditandai **beragam UoM** dan tidak dipaksakan menjadi pcs. Semua ini hanya tampilan dan normalisasi respons API (tanpa migration DB/Odoo write). Lihat [panduan produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
-
-### Pengamanan Qty produksi tanpa desimal dan tanpa penjumlahan lintas UoM
-Qty operasional bulat seperti `1.0000` ditampilkan `1`, bukan `1,0000`; angka pecahan historis ditandai **Perlu koreksi Qty** dan tidak dibulatkan. Jika SKU dalam satu order menggunakan satuan berbeda, Qty ditampilkan **per UoM**, bukan dijumlahkan menjadi angka tanpa makna. Contoh `1 Kg · 500 gram`, bukan `501 beragam UoM`. Representasi multi-UoM **untuk SKU yang sama** belum tersedia pada tabel StoreOrderLine (unik per order+product); perlu desain lanjutan agar setara model Odoo. Baca [panduan Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+PR dokumentasi kontrak ini **tidak memerlukan rebuild, migrasi database, atau perubahan Odoo**.
