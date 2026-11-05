@@ -167,3 +167,72 @@ a { color: #1769af; }
   .action-buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .action-buttons .btn { padding: 0 10px; }
 }
+
+/* Admin Produksi — same lightweight Horizon-inspired design system. */
+.production-nav-link { font-size: 12px; font-weight: 700; text-decoration: none; }
+.production-readonly {
+  font-size: 12px; font-weight: 700; color: #426d8e;
+  border: 1px solid #c9dce9; background: #eef6fc;
+  border-radius: 20px; padding: 8px 14px; white-space: nowrap;
+}
+.production-selector-grid {
+  display: grid; align-items: end;
+  grid-template-columns: minmax(165px,.9fr) minmax(210px,1.4fr) minmax(150px,1fr) auto;
+  gap: 17px; margin-top: 20px;
+}
+.production-selector-grid label { display: flex; flex-direction: column; gap: 9px; font-size: 12px; font-weight: 700; color: #526781; }
+.production-selector-grid select, .production-selector-grid input {
+  min-width: 0; width: 100%; height: 42px; border-radius: 7px;
+  border: 1px solid #cfd9e6; background: #fff; color: #1c3652;
+  padding: 0 11px; font-size: 13px; font-weight: 500;
+}
+.production-refresh { align-self: end; white-space: nowrap; }
+.production-summary-grid { margin-top: 0; }
+.production-status-card { padding: 23px 25px 22px; margin-bottom: 19px; }
+.production-status-counts { margin: 16px 0; display: flex; gap: 9px; flex-wrap: wrap; }
+.production-status-counts span { font-size: 11px; font-weight: 700; border-radius: 18px; padding: 7px 12px; background: #eef3f8; color: #546c83; }
+.production-stores { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 9px; }
+.production-store {
+  border: 1px solid #e7edf4; background: #fcfdff; border-radius: 8px;
+  padding: 12px; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; min-width: 0;
+}
+.production-store > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.production-store strong { color: #344b63; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.production-store small { font-size: 10px; color: #8c9aad; }
+.production-store-status { font-size: 10px; text-align: right; font-weight: 700; color: #6d7d90; }
+.production-store-status.kirim { color: #14835d; }
+.production-store-status.no_order { color: #677a8a; }
+.production-store-status.draft { color: #aa7327; }
+.production-store-status.not_entered { color: #ad5761; }
+.production-table-scroll { max-height: min(56vh,660px); }
+.production-table { min-width: 600px; }
+.production-table thead th:nth-child(1) { width: 155px; }
+.production-table thead th:nth-child(2) { width: auto; }
+.production-table .production-store-count { width: 125px; text-align: center; font-variant-numeric: tabular-nums; }
+.production-data-row { cursor: pointer; }
+.production-data-row:hover, .production-data-row.production-expanded { background: #eff7fe; }
+.production-expand {
+  border: none; color: #1576b8; background: transparent;
+  padding: 7px 12px 7px 1px; font-size: 15px; font-weight: 700;
+}
+.production-detail-row td { padding: 0 25px 15px !important; background: #f8fbff; }
+.production-detail { border: 1px solid #dbe8f4; border-radius: 9px; background: #fff; padding: 12px 18px; max-width: 700px; }
+.production-detail-heading { font-size: 11px; font-weight: 800; color: #3e5a72; margin: 3px 0 11px; }
+.production-detail-store { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid #eff3f8; }
+.production-detail-store > div { display: flex; flex-direction: column; gap: 3px; }
+.production-detail-store strong { color: #244662; font-size: 12px; font-variant-numeric: tabular-nums; }
+.production-detail-store span { color: #8193a5; font-size: 11px; }
+.production-note { padding: 18px 4px 24px; color: #7b8da1; line-height: 1.65; font-size: 12px; }
+@media (max-width: 1120px) {
+  .production-selector-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 730px) {
+  .production-readonly { font-size: 11px; }
+  .production-status-card { padding: 18px; }
+  .production-status-counts { margin: 13px 0; }
+  .production-stores { grid-template-columns: 1fr; }
+  .production-selector-grid { grid-template-columns: 1fr; gap: 12px; }
+  .production-nav-link { font-size: 11px; padding: 6px; }
+  .production-table .production-store-count { width: 100px; }
+}
