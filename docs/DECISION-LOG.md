@@ -200,3 +200,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **D-054 (✅ UX dari pengguna):** Tombol **Lihat rekap** di Admin Produksi membuka pop-up/modal di atas daftar antrean, bukan mengganti halaman atau menambahkan rincian panjang di bawahnya. Setelah ditutup pengguna tetap berada di daftar dan baris semula.
 - **I-043 (✅):** React memakai native HTML `dialog`, fokus dialihkan ke tombol tutup, Escape/klik backdrop/tombol menutup modal, dan fokus dikembalikan ke tombol yang tadi membuka rekap. Filter/pagination/scroll antrean dipertahankan; rekap loading/error ada di dalam modal.
 - **I-044 (✅ tes frontend):** Tambahkan unit interaction tests untuk buka rekap, tutup rekap, Escape dan pengembalian fokus via Vitest/jsdom di CI.
+
+## Tampilan Qty integer dan UoM produk di Admin Produksi — 2026-11-06
+- **D-055 (✅ pengguna):** Seluruh Qty integer pada daftar produksi dan rekap tidak boleh tampil seperti `1232.0000`; gunakan `1.232`, `120`, dst. Label generik `unit` tidak digunakan.
+- **D-056 (✅):** Satuan per SKU **mengikuti UoM asli master produk** yang sudah tersedia dari Odoo pada `Product.uom`. Jika kosong gunakan **pcs**; bila satu pesanan memuat beberapa UoM berbeda, beri label **beragam UoM**, jangan salah sebut semua pcs.
+- **I-045 (✅):** API produksi menormalkan nilai total integral dan menyertakan `uom` per produk serta `qty_uom` untuk total pesanan/rekap. Formatter React hanya menghapus pecahan nol, tanpa membulatkan nilai pecahan historis.
+- **I-046 (✅):** Tes backend/frontend mencakup Qty `1232.0000`, fallback pcs, UoM asli, UoM campuran, dan desimal historis yang tidak boleh dibulatkan.
+- Tidak mengubah skema PostgreSQL, BoM, sinkronisasi Odoo, atau satuan master.
