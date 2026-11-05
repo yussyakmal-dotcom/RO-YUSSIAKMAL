@@ -1,150 +1,115 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { LoginPage } from "./App";
 import {
-  initializeSession, loadProductionDemand, loadRecentSentOrders, logout,
-  type ProductionDemand, type ProductionStoreStatus, type RecentSentOrder, type SessionInfo,
+  initializeSession, loadProductionDemand, loadProductionInbox, logout,
+  type ProductionDemand, type ProductionInbox, type ProductionInboxFilter,
+  type ProductionInboxOrder, type SessionInfo,
 } from "./api";
-import { deliveryDateInWib } from "./utils";
 
-function readableInteger(value: string): string {
-  try {
-    return new Intl.NumberFormat("id-ID").format(BigInt(value));
-  } catch {
-    return value;
-  }
-}
-
-function storeStatusLabel(status: ProductionStoreStatus): string {
-  if (status === "KIRIM") return "Kirim";
-  if (status === "NO_ORDER") return "No Order";
-  if (status === "DRAFT") return "Draft belum dikirim";
-  return "Belum membuat pesanan";
+function units(value: string): string {
+  try { return new Intl.NumberFormat("id-ID").format(BigInt(value)); }
+  catch { return value; }
 }
 
 function ProductionApp() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [fatal, setFatal] = useState("");
-  const [deliveryDate, setDeliveryDate] = useState(deliveryDateInWib(2));
-  const [kitchenCode, setKitchenCode] = useState("");
-  const [scheduleCode, setScheduleCode] = useState("");
-  const [report, setReport] = useState<ProductionDemand | null>(null);
+  const [filter, setFilter] = useState<ProductionInboxFilter>("ALL");
+  const [page, setPage] = useState(1);
+  const [refresh, setRefresh] = useState(0);
+  const [inbox, setInbox] = useState<ProductionInbox | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [recentOrders, setRecentOrders] = useState<RecentSentOrder[]>([]);
-  const [recentLoading, setRecentLoading] = useState(false);
-  const [recentError, setRecentError] = useState("");
-  const [showRecent, setShowRecent] = useState(false);
-
-  const setCurrentSession = (info: SessionInfo) => {
-    setSession(info);
-    const firstWithItems = info.kitchens.find((k) => k.item_count > 0);
-    setKitchenCode(firstWithItems?.code ?? info.kitchens[0]?.code ?? "");
-    setScheduleCode(info.schedules[0]?.code ?? "");
-  };
+  const [selected, setSelected] = useState<ProductionInboxOrder | null>(null);
+  const [report, setReport] = useState<ProductionDemand | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   useEffect(() => {
-    let alive = true;
+    let active = true;
     initializeSession().then((info) => {
-      if (!alive) return;
-      if (info) setCurrentSession(info);
+      if (!active) return;
+      setSession(info);
       setInitializing(false);
     }).catch((err: unknown) => {
-      if (!alive) return;
-      setFatal(err instanceof Error ? err.message : "Tidak bisa menghubungi server.");
+      if (!active) return;
+      setFatal(err instanceof Error ? err.message : "Gagal memuat sesi.");
       setInitializing(false);
     });
-    return () => { alive = false; };
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (!session?.user.can_access_production || !kitchenCode || !scheduleCode || !deliveryDate) {
-      setReport(null);
+    if (!session?.user.can_access_production) {
+      setInbox(null);
       return;
     }
     const controller = new AbortController();
     setError("");
-    setReport(null);
-    setExpanded(null);
     setLoading(true);
-    loadProductionDemand(
-      { delivery_date: deliveryDate, kitchen_code: kitchenCode, schedule_code: scheduleCode },
-      controller.signal,
-    ).then((data) => {
-      if (!controller.signal.aborted) {
-        setReport(data);
-        if (data.summary.stores_sent === 0) setShowRecent(true);
-      }
+    setInbox(null);
+    loadProductionInbox(filter, page, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setInbox(value);
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
-        setError(err instanceof Error ? err.message : "Gagal memuat rekap.");
+        setError(err instanceof Error ? err.message : "Tidak dapat memuat pesanan.");
       }
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [session, kitchenCode, scheduleCode, deliveryDate, refreshKey]);
+  }, [session, filter, page, refresh]);
 
   useEffect(() => {
-    if (!session?.user.can_access_production) return;
+    if (!session?.user.can_access_production || !selected) {
+      setReport(null);
+      return;
+    }
     const controller = new AbortController();
-    setRecentLoading(true);
-    setRecentError("");
-    loadRecentSentOrders(controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted) setRecentOrders(data.items);
-      }).catch((err: unknown) => {
-        if (!controller.signal.aborted) {
-          setRecentError(err instanceof Error ? err.message : "Daftar pesanan tidak tersedia.");
-        }
-      }).finally(() => {
-        if (!controller.signal.aborted) setRecentLoading(false);
-      });
+    setReportLoading(true);
+    setReportError("");
+    setReport(null);
+    loadProductionDemand({
+      delivery_date: selected.delivery_date,
+      kitchen_code: selected.kitchen_code,
+      schedule_code: selected.schedule_code,
+    }, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setReport(value);
+    }).catch((err: unknown) => {
+      if (!controller.signal.aborted) {
+        setReportError(err instanceof Error ? err.message : "Rekap tidak dapat ditampilkan.");
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setReportLoading(false);
+    });
     return () => controller.abort();
-  }, [session, refreshKey]);
+  }, [session, selected, refresh]);
 
-  const openRecentScope = (order: RecentSentOrder) => {
-    setDeliveryDate(order.delivery_date);
-    setKitchenCode(order.kitchen_code);
-    setScheduleCode(order.schedule_code);
-    setSearch("");
-    setShowRecent(false);
+  const chooseFilter = (value: ProductionInboxFilter) => {
+    if (value === filter) return;
+    setFilter(value);
+    setPage(1);
   };
-
-  const visibleRows = useMemo(() => {
-    if (!report) return [];
-    const key = search.trim().toLocaleLowerCase("id-ID");
-    return report.items.filter((row) =>
-      !key || row.sku.toLocaleLowerCase("id-ID").includes(key) ||
-      row.name.toLocaleLowerCase("id-ID").includes(key),
-    );
-  }, [report, search]);
 
   const signOut = async () => {
     setError("");
     try {
       await logout();
       setSession(null);
-      setReport(null);
+      setSelected(null);
+      setInbox(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal keluar.");
     }
   };
 
   if (initializing) return <div className="boot-screen"><span className="spinner" /> Memuat Admin Produksi…</div>;
-  if (fatal) return (
-    <div className="boot-screen">
-      <div className="error-box">
-        <h2>Gagal membuka workspace</h2>
-        <p>{fatal}</p>
-        <button className="btn btn-primary" onClick={() => window.location.reload()}>Coba lagi</button>
-      </div>
-    </div>
-  );
-  if (!session) return <LoginPage onSuccess={setCurrentSession} />;
+  if (fatal) return <div className="boot-screen"><div className="error-box">
+    <h2>Gagal memuat workspace</h2><p>{fatal}</p>
+    <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>Coba lagi</button>
+  </div></div>;
+  if (!session) return <LoginPage onSuccess={setSession} />;
 
   return (
     <div className="app-shell">
@@ -160,170 +125,121 @@ function ProductionApp() {
           <span className="topbar-workspace">Workspace Admin Produksi</span>
           <span className="user-initial">{session.user.full_name.slice(0, 1).toUpperCase()}</span>
           <span className="user-name">{session.user.full_name}</span>
-          <button type="button" onClick={signOut} className="ghost-btn logout">Keluar</button>
+          <button type="button" className="ghost-btn logout" onClick={signOut}>Keluar</button>
         </div>
       </header>
       <div className="shell-body">
         <aside className="sidebar">
           <div className="sidebar-eyebrow">WORKSPACE</div>
-          <div className="side-link selected"><span className="side-icon">▤</span> Rekap Kebutuhan</div>
+          <div className="side-link selected"><span className="side-icon">▤</span> Antrean Produksi</div>
           <div className="sidebar-divider" />
-          <div className="sidebar-caption">Rekap permintaan final</div>
+          <div className="sidebar-caption">Alur pesanan toko</div>
           <div className="sidebar-help">
-            <strong>Dasar perhitungan</strong>
-            <p>Hanya pesanan berstatus Kirim. Draft, No Order dan toko yang belum mengirim tidak ikut total.</p>
-            <p>Rekap menurut tanggal dan jadwal kirim. Tanggal produksi belum ditetapkan.</p>
+            <strong>Status untuk produksi</strong>
+            <p><b>Kirim</b>: siap dikonsolidasi.</p>
+            <p><b>Proses Produksi</b>: sudah masuk konsolidasi.</p>
+            <p>Draft dan No Order tidak masuk antrean produksi.</p>
           </div>
           <div className="sidebar-bottom">RO Middleware · V1</div>
         </aside>
         <main className="workspace">
-          <div className="breadcrumb">Workspace <span>/</span> Admin Produksi <span>/</span> Rekap Kebutuhan</div>
+          <div className="breadcrumb">Workspace <span>/</span> Admin Produksi <span>/</span> Antrean Pesanan</div>
           <div className="page-heading">
             <div>
               <div className="eyebrow">ADMIN PRODUKSI</div>
-              <h1>Rekap Kebutuhan Toko</h1>
-              <p>Total permintaan final per SKU, dengan rincian asal toko.</p>
+              <h1>Antrean Pesanan Produksi</h1>
+              <p>Semua pesanan Kirim dan Proses Produksi dari seluruh toko, tanggal, dapur, dan jadwal.</p>
             </div>
-            <span className="production-readonly">Baca saja · Tidak membuat MO</span>
+            <span className="production-readonly">Belum membuat MO Odoo</span>
           </div>
-
           {!session.user.can_access_production ? (
             <section className="card empty-config">
               <h2>Akses Admin Produksi diperlukan</h2>
-              <p>Akun ini belum menjadi anggota Group PRODUCTION atau ADMIN. Minta Administrator mengatur hak akses di Django Admin.</p>
-              {session.user.can_access_store && <p><a href="/toko/">Kembali ke Workspace Admin Toko</a></p>}
+              <p>Akun ini memerlukan Group PRODUCTION atau ADMIN. Akun STORE tidak dapat melihat antrean ini.</p>
+              {session.user.can_access_store && <a href="/toko/">Kembali ke Admin Toko</a>}
             </section>
           ) : (
             <>
-              <section className="card selector-card">
-                <div className="section-heading"><span className="step-number">01</span> Pilih Lingkup Rekap</div>
-                <div className="production-selector-grid">
-                  <label>Tanggal Pengiriman
-                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                  </label>
-                  <label>Dapur Produksi
-                    <select value={kitchenCode} onChange={(e) => setKitchenCode(e.target.value)}>
-                      {session.kitchens.map((k) => <option key={k.code} value={k.code}>{k.name}</option>)}
-                    </select>
-                  </label>
-                  <label>Jadwal Kirim
-                    <select value={scheduleCode} onChange={(e) => setScheduleCode(e.target.value)}>
-                      {session.schedules.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-                    </select>
-                  </label>
-                  <button type="button" className="btn btn-secondary production-refresh" onClick={() => setRefreshKey((v) => v + 1)} disabled={loading}>
-                    {loading ? "Memuat…" : "Muat Ulang"}
-                  </button>
-                </div>
-              </section>
-
-              <section className="card production-recent-card">
-                <div className="production-recent-heading">
+              {error && <div className="message error" role="alert">{error}</div>}
+              <div className="production-inbox-tabs" role="group" aria-label="Filter status pesanan produksi">
+                <button className={"production-tab " + (filter === "ALL" ? "selected" : "")} type="button" onClick={() => chooseFilter("ALL")}>Semua ({inbox?.counts.all ?? "…" })</button>
+                <button className={"production-tab " + (filter === "KIRIM" ? "selected" : "")} type="button" onClick={() => chooseFilter("KIRIM")}>Kirim ({inbox?.counts.kirim ?? "…" })</button>
+                <button className={"production-tab " + (filter === "PROSES_PRODUKSI" ? "selected" : "")} type="button" onClick={() => chooseFilter("PROSES_PRODUKSI")}>Proses Produksi ({inbox?.counts.proses_produksi ?? "…" })</button>
+              </div>
+              <section className="card order-card">
+                <div className="order-title-bar">
                   <div>
-                    <div className="section-heading">Temukan Pesanan yang Sudah Kirim</div>
-                    <p>Lintas tanggal, dapur dan jadwal. Klik “Lihat rekap” untuk menyamakan filter dengan pesanan.</p>
+                    <div className="section-heading"><span className="step-number">01</span> Daftar Pesanan</div>
+                    <p>Prioritas pesanan Kirim lebih dahulu. Semua tanggal tercakup.</p>
                   </div>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => setShowRecent((value) => !value)}
-                  >{showRecent ? "Tutup daftar" : "Lihat Kirim terbaru"}</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setRefresh((v) => v + 1)} disabled={loading}>Muat Ulang</button>
                 </div>
-                {showRecent && (
-                  <div className="production-recent-body">
-                    {recentLoading && <p>Memuat pesanan Kirim terbaru…</p>}
-                    {recentError && <div className="message error" role="alert">{recentError}</div>}
-                    {!recentLoading && !recentError && !recentOrders.length &&
-                      <p>Belum ada pesanan berstatus KIRIM di database middleware.</p>}
-                    {!recentLoading && !recentError && !!recentOrders.length && (
-                      <div className="production-recent-scroll">
-                        <table className="production-recent-table">
-                          <thead><tr><th>Toko</th><th>Tanggal Kirim</th><th>Dapur</th><th>Jadwal</th><th>SKU</th><th>Aksi</th></tr></thead>
-                          <tbody>{recentOrders.map((order) => (
+                {loading && <div className="table-placeholder"><span className="spinner" /> Memuat antrean…</div>}
+                {!loading && inbox && (
+                  <>
+                    <div className="table-scroll">
+                      <table className="production-inbox-table">
+                        <thead><tr><th>ID / Toko</th><th>Tanggal Kirim</th><th>Dapur</th><th>Jadwal</th><th>SKU / Total Qty</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                          {inbox.items.map((order) => (
                             <tr key={order.order_id}>
-                              <td><strong>{order.store_name}</strong><small>#{order.order_id} · {order.store_code}</small></td>
+                              <td><strong>{order.store_name}</strong><small>Order #{order.order_id} · {order.store_code}</small></td>
                               <td>{order.delivery_date}</td>
                               <td>{order.kitchen_name}</td>
                               <td>{order.schedule_name}</td>
-                              <td>{order.sku_count}</td>
-                              <td><button type="button" className="production-open-rekap" onClick={() => openRecentScope(order)}>Lihat rekap</button></td>
+                              <td><strong>{order.sku_count} SKU</strong><small>{units(order.qty_total)} unit</small></td>
+                              <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
+                              <td><button type="button" className="production-open-rekap" onClick={() => setSelected(order)}>Lihat rincian</button></td>
                             </tr>
-                          ))}</tbody>
-                        </table>
-                      </div>
-                    )}
-                    <p className="production-recent-footnote">Maksimal 30 pesanan KIRIM terbaru. Tidak ada perubahan data saat membuka rekap.</p>
-                  </div>
-                )}
-              </section>
-
-              {error && <div className="message error" role="alert"><strong>Rekap belum dapat ditampilkan:</strong> {error}</div>}
-              {loading && <div className="card table-placeholder"><span className="spinner" /> Menghitung rekap pesanan final…</div>}
-
-              {report && !loading && (
-                <>
-                  <div className="summary-grid production-summary-grid">
-                    <div className="summary-box"><span>Toko sudah Kirim</span><strong>{report.summary.stores_sent}</strong><small>Dari {report.summary.stores_total} toko</small></div>
-                    <div className="summary-box"><span>SKU diminta</span><strong>{report.summary.sku_count}</strong><small>SKU unik pada rekap final</small></div>
-                    <div className="summary-box"><span>Total Qty</span><strong>{readableInteger(report.summary.qty_total)}</strong><small>Unit seluruh SKU</small></div>
-                  </div>
-
-                  <section className="card production-status-card">
-                    <div className="section-heading"><span className="step-number">02</span> Status Pesanan Tiap Toko</div>
-                    <div className="production-status-counts">
-                      <span>{report.summary.stores_sent} Kirim</span>
-                      <span>{report.summary.stores_no_order} No Order</span>
-                      <span>{report.summary.stores_draft} Draft</span>
-                      <span>{report.summary.stores_not_entered} Belum dibuat</span>
-                    </div>
-                    <div className="production-stores">
-                      {report.store_statuses.map((row) => (
-                        <div key={row.store_code} className="production-store">
-                          <div><strong>{row.store_name}</strong><small>{row.store_code}</small></div>
-                          <span className={"production-store-status " + row.status.toLowerCase()}>
-                            {storeStatusLabel(row.status)}
-                            {row.status === "KIRIM" && row.auto_submitted ? " · Otomatis" : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="card order-card">
-                    <div className="order-title-bar">
-                      <div>
-                        <div className="section-heading"><span className="step-number">03</span> Total Kebutuhan SKU</div>
-                        <p>Hanya KIRIM · {report.kitchen.name} · {report.schedule.name} · {report.delivery_date}</p>
-                      </div>
-                    </div>
-                    <div className="filters-row">
-                      <label className="search-box">
-                        <span aria-hidden="true">⌕</span>
-                        <input type="search" placeholder="Cari SKU atau nama produk…" value={search} onChange={(e) => setSearch(e.target.value)} />
-                      </label>
-                      <span className="result-count">{visibleRows.length} SKU ditampilkan</span>
-                    </div>
-                    <div className="table-scroll production-table-scroll">
-                      <table className="qty-table production-table">
-                        <thead><tr>
-                          <th>SKU</th><th>Nama Produk</th><th className="production-store-count">Toko pemesan</th><th className="qty-col">Total Qty</th>
-                        </tr></thead>
-                        <tbody>
-                          {visibleRows.map((item) => (
-                            <FragmentRow key={item.product_id} item={item} expanded={expanded === item.product_id} toggle={() => setExpanded(expanded === item.product_id ? null : item.product_id)} />
                           ))}
-                          {!visibleRows.length && <tr><td colSpan={4} className="empty-table">Belum ada SKU final untuk filter ini.</td></tr>}
+                          {!inbox.items.length && <tr><td colSpan={7} className="production-inbox-empty">Belum ada pesanan untuk status ini.</td></tr>}
                         </tbody>
                       </table>
                     </div>
-                    <div className="table-hint">
-                      <span>Klik baris SKU untuk melihat rincian Qty tiap toko.</span>
-                      <span>Draft/No Order tidak dihitung</span>
+                    <div className="production-inbox-footer">
+                      <span className="result-count">{inbox.total} pesanan · Halaman {page} · {inbox.page_size} per halaman</span>
+                      <div className="action-buttons">
+                        <button className="btn btn-secondary" type="button" disabled={page === 1} onClick={() => setPage((v) => Math.max(1, v - 1))}>Sebelumnya</button>
+                        <button className="btn btn-secondary" type="button" disabled={!inbox.has_more} onClick={() => setPage((v) => v + 1)}>Berikutnya</button>
+                      </div>
                     </div>
-                  </section>
-                  <div className="production-note">{report.note} Fitur revisi rencana, kapasitas dan pembuatan MO merupakan tahap berikutnya.</div>
-                </>
+                  </>
+                )}
+              </section>
+              {selected && (
+                <section className="card production-scope" aria-live="polite">
+                  <div className="production-scope-header">
+                    <div>
+                      <div className="section-heading"><span className="step-number">02</span> Rincian Konsolidasi</div>
+                      <p className="production-scope-meta">{selected.kitchen_name} · {selected.delivery_date} · {selected.schedule_name}</p>
+                      <p className="production-scope-meta">Total per SKU dari pesanan Kirim dan Proses Produksi pada lingkup yang sama.</p>
+                    </div>
+                    <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Tutup</button>
+                  </div>
+                  {reportLoading && <div className="table-placeholder"><span className="spinner" /> Menghitung kebutuhan SKU…</div>}
+                  {reportError && <div className="message error" role="alert">{reportError}</div>}
+                  {report && !reportLoading && (
+                    <>
+                      <p className="production-scope-summary">
+                        {report.summary.sku_count} SKU · {units(report.summary.qty_total)} unit ·
+                        {" "}{report.summary.stores_sent} pesanan Kirim · {report.summary.stores_in_production} Proses Produksi
+                      </p>
+                      <div className="production-scope-details">
+                        {report.items.map((item) => (
+                          <details key={item.product_id}>
+                            <summary>{item.sku} — {item.name}: {units(item.qty_total)} unit ({item.store_count} toko)</summary>
+                            {item.sources.map((source) => (
+                              <p key={source.order_id}>{source.store_name} · Order #{source.order_id} · {units(source.qty)} unit · {source.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</p>
+                            ))}
+                          </details>
+                        ))}
+                        {!report.items.length && <p>Belum ada baris Qty final dalam lingkup ini.</p>}
+                      </div>
+                    </>
+                  )}
+                </section>
               )}
+              <p className="production-note">Status Proses Produksi hanya akan diberikan ketika langkah konsolidasi rencana benar-benar disimpan. Membuka rincian tidak mengubah status atau membuat MO.</p>
             </>
           )}
         </main>
@@ -331,39 +247,4 @@ function ProductionApp() {
     </div>
   );
 }
-
-function FragmentRow({
-  item, expanded, toggle,
-}: {
-  item: ProductionDemand["items"][number];
-  expanded: boolean;
-  toggle: () => void;
-}) {
-  return (
-    <>
-      <tr className={"production-data-row " + (expanded ? "production-expanded" : "")} onClick={toggle}>
-        <td><button type="button" className="production-expand" aria-expanded={expanded} aria-label={"Rincian " + item.name}>{expanded ? "▾" : "▸"}</button><span className="sku">{item.sku || "—"}</span></td>
-        <td><span className="product-name">{item.name}</span></td>
-        <td className="production-store-count">{item.store_count}</td>
-        <td className="qty-col"><strong className="qty-final">{readableInteger(item.qty_total)}</strong></td>
-      </tr>
-      {expanded && (
-        <tr className="production-detail-row">
-          <td colSpan={4}>
-            <div className="production-detail">
-              <div className="production-detail-heading">Rincian permintaan dari toko</div>
-              {item.sources.map((source) => (
-                <div className="production-detail-store" key={source.order_id}>
-                  <div><strong>{source.store_name}</strong><span>{source.store_code} · Order #{source.order_id}{source.auto_submitted ? " · otomatis" : ""}</span></div>
-                  <strong>{readableInteger(source.qty)}</strong>
-                </div>
-              ))}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
 export default ProductionApp;
