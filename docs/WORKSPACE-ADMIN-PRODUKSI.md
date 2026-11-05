@@ -18,7 +18,7 @@ Buka `http://localhost:900/produksi/` dan login memakai superuser/ADMIN atau Gro
 - **Filter Kirim** untuk antrean siap konsolidasi; **Proses Produksi** untuk pesanan yang sudah dikonsolidasi.
 - Tabel menampilkan Order ID, toko, tanggal kirim, dapur, jadwal kirim, jumlah SKU, total Qty, dan status.
 - Kirim ditampilkan lebih dahulu; pagination **50 pesanan per halaman**, tombol Sebelumnya/Berikutnya. Jadi daftar tidak diam-diam dipotong ke 30 pesanan terbaru.
-- Klik **Lihat rincian** untuk melihat Qty per SKU yang dikumpulkan dalam lingkup tanggal kirim/dapur/jadwal pesanan tersebut, termasuk asal toko dan status masing-masing.
+- Klik **Lihat rekap** untuk membuka **modal di atas antrean** (bukan panel panjang di bawah tabel atau pindah halaman). Rekap menunjukkan total per SKU pada lingkup tanggal kirim/dapur/jadwal pesanan, termasuk asal toko dan statusnya. Daftar dan filter di belakang modal tidak berubah; tekan **Tutup Rekap**, ikon ×, **Esc**, atau klik area luar modal untuk kembali. Fokus keyboard kembali ke tombol `Lihat rekap` yang tadi dipilih.
 - Halaman ini **belum membuat ProductionPlan, MO, atau transfer**; tanggal produksi masih memerlukan keputusan SOP.
 
 ## API
@@ -65,3 +65,10 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 - Ketika fitur konsolidasi yang menulis ProductionPlan dibangun, status menjadi `PROSES_PRODUKSI` **hanya setelah konsolidasi berhasil disimpan secara atomik**. Hindari tombol yang cuma mengganti status tanpa membuat hasil konsolidasi.
 - Auto-submit H-2 menghasilkan `KIRIM`; tidak otomatis memindahkan pesanan ke PROSES PRODUKSI.
 - Aturan pesanan terlambat setelah cutoff H-2 07.00 WIB masih menjadi keputusan terpisah.
+
+## Pola navigasi rekap — modal tanpa kehilangan fokus
+- Modal memakai native HTML `dialog`, sehingga selama terbuka fokus keyboard berada di dalam modal dan daftar di belakang tidak aktif.
+- Modal memiliki judul dan informasi tanggal/dapur/jadwal, indikator loading/error, total SKU/Qty, serta rincian yang bisa dibuka per SKU.
+- Isi modal memiliki scroll sendiri agar halaman antrean tetap pada posisi semula.
+- Ketika modal ditutup, fokus kembali ke tombol `Lihat rekap` pada baris yang sama; tidak reload antrean, tidak mengubah halaman pagination atau filter.
+- Modal hanya membaca API rekap yang sudah ada; tidak mengubah status dan tidak menjalankan konsolidasi.

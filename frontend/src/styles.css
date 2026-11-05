@@ -285,3 +285,104 @@ a { color: #1769af; }
 .production-scope-details summary { cursor: pointer; color: #294d6d; font-size: 12px; font-weight: 700; }
 .production-scope-details p { font-size: 12px; margin: 8px 0 0 18px; color: #718296; }
 @media(max-width:730px){.production-inbox-footer {flex-direction:column;align-items:stretch}.production-scope-header{flex-direction:column}}
+
+/* Rekap is a native modal in the top layer; inbox stays in place behind it. */
+.production-recap-dialog {
+  width: min(930px, calc(100vw - 32px));
+  max-width: 930px;
+  max-height: min(90dvh, 900px);
+  padding: 0;
+  margin: auto;
+  background: #fff;
+  color: #20334b;
+  border: 1px solid #d9e5f1;
+  border-radius: 14px;
+  box-shadow: 0 25px 75px rgba(13, 31, 58, .25);
+  overflow: hidden;
+}
+.production-recap-dialog::backdrop { background: rgba(20, 36, 57, .56); }
+.production-recap-content { display: flex; flex-direction: column; max-height: min(90dvh, 900px); min-height: 220px; }
+.production-recap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-shrink: 0;
+  padding: 24px 26px 19px;
+  border-bottom: 1px solid #e5ebf3;
+  background: #f9fbfe;
+}
+.production-recap-header h2 { margin: 7px 0; color: #18334e; font-size: 21px; letter-spacing: -.4px; }
+.production-recap-header p { margin: 5px 0; color: #5e7790; font-size: 12px; line-height: 1.5; }
+.production-recap-header .production-recap-context { color: #8293a5; }
+.production-recap-close {
+  border: 1px solid #d7e3ee;
+  border-radius: 7px;
+  color: #496985;
+  background: #fff;
+  font-size: 24px;
+  line-height: 1;
+  height: 36px;
+  width: 36px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.production-recap-close:hover { background: #eaf3fc; }
+.production-recap-close:focus-visible,
+.production-recap-item summary:focus-visible { outline: 3px solid #9bcfff; outline-offset: 2px; }
+.production-recap-body { min-height: 100px; overflow: auto; overscroll-behavior: contain; padding: 19px 26px 22px; flex: 1; }
+.production-recap-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 19px; }
+.production-recap-summary > div { padding: 15px; border: 1px solid #e0e8f0; border-radius: 9px; display: flex; flex-direction: column; gap: 7px; }
+.production-recap-summary span { color: #7b8da1; font-size: 11px; }
+.production-recap-summary strong { color: #1e476d; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.production-recap-list { border: 1px solid #dfe8f1; border-radius: 9px; overflow: hidden; }
+.production-recap-item { border-bottom: 1px solid #e9eff4; }
+.production-recap-item:last-child { border-bottom: none; }
+.production-recap-item > summary {
+  padding: 13px 17px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  list-style: none;
+}
+.production-recap-item > summary::-webkit-details-marker { display: none; }
+.production-recap-item > summary::before { content: "▸"; color: #1771af; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+.production-recap-item[open] > summary::before { content: "▾"; }
+.production-recap-item > summary:hover { background: #f4faff; }
+.production-recap-product { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.production-recap-product strong { font-size: 12px; color: #314c67; overflow-wrap: anywhere; }
+.production-recap-product small { font-size: 11px; color: #8b9daf; }
+.production-recap-quantity { color: #175c97; font-size: 13px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.production-recap-sources { padding: 3px 18px 12px 40px; background: #f7fbff; }
+.production-recap-source { padding: 10px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #e8f0f7; }
+.production-recap-source > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.production-recap-source strong { color: #294d6b; font-size: 12px; }
+.production-recap-source small { color: #8295a7; font-size: 11px; }
+.production-recap-empty { padding: 20px; text-align: center; color: #7c8ea1; font-size: 12px; }
+.production-recap-disclaimer { font-size: 11px; color: #8293a3; line-height: 1.5; margin: 16px 0 0; }
+.production-recap-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #e7edf4;
+  padding: 14px 26px;
+  background: #fff;
+}
+.production-recap-footer span { font-size: 11px; color: #899aac; }
+@media (max-width: 730px) {
+  .production-recap-dialog { width: calc(100vw - 18px); max-height: 94dvh; border-radius: 10px; }
+  .production-recap-content { max-height: 94dvh; }
+  .production-recap-header { padding: 19px 17px 14px; }
+  .production-recap-header h2 { font-size: 18px; }
+  .production-recap-body { padding: 15px 13px; }
+  .production-recap-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .production-recap-summary strong { font-size: 20px; }
+  .production-recap-item > summary { padding: 11px 10px; }
+  .production-recap-sources { padding-left: 26px; }
+  .production-recap-footer { padding: 13px 15px; }
+}
