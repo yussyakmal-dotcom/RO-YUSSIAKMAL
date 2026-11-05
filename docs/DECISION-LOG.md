@@ -150,3 +150,9 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-022 (penyederhanaan):** Tidak menambah microservice atau database. Ada management command idempotent `seed_order_schedules` untuk tiga jadwal standar bila belum ada.
 - **I-023 (belum):** Auto-submit H-2 07.00 WIB, React frontend workspace lain, reverse proxy/HTTPS production, dan transaksi write ke Odoo tetap pekerjaan berikutnya.
 - Panduan: [Workspace Admin Toko](./WORKSPACE-ADMIN-TOKO.md).
+
+## Keputusan Qty integer untuk pemesanan toko — 2026-11-05
+- **D-051 (✅):** Pengguna menetapkan **Qty input Admin Toko hanya integer** (0, 1, 2, ...), tidak menerima desimal.
+- **I-024 (implementasi):** Frontend memakai input numerik digit saja, API Django memvalidasi integer nonnegatif. Draft tetap editable, dan Kirim hanya mengambil Qty ≥1.
+- **I-025 (kompatibilitas):** Kolom Qty PostgreSQL masih Decimal(18,4) supaya tidak perlu migration berisiko; integritas bilangan bulat dijaga API. Draft historis yang punya pecahan diblokir saat Kirim sampai pengguna memperbaikinya.
+- **Koreksi D-050:** Frasa Qty di bawah 1 dikeluarkan tetap berlaku untuk nol; **Qty pecahan kini tidak valid sejak tahap input**, bukan diizinkan lalu disaring saat Kirim.
