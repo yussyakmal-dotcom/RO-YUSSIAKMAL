@@ -88,3 +88,6 @@ Panduan lengkap: [Workspace Admin Toko](docs/WORKSPACE-ADMIN-TOKO.md). Build fro
 Schema dieksekusi melalui Django migrations. Jangan jalankan SQL docs/DDL.md secara manual. Proyek ini *scaffold development*, belum memiliki seluruh workflow operasional, integrasi transaksi Odoo, atau deployment production.
 
 Jangan commit .env, credential Odoo, file backup. Hindari `docker compose down -v` jika data PostgreSQL ingin dipertahankan.
+
+## Qty integer pada Workspace Admin Toko
+Qty input pesanan toko menerima **hanya bilangan bulat**: `0, 1, 2, ...`. Tidak boleh desimal. Draft tetap dapat dibuka dan diedit, Kirim hanya memproses Qty ≥1, semua nol → No Order. Validasi juga dilakukan server-side, dan tidak ada perubahan/migration DB untuk aturan ini.
