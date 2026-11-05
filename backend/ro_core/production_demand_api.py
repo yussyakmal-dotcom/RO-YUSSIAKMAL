@@ -4,6 +4,8 @@ Aggregate ONLY final StoreOrder KIRIM by delivery date + kitchen + delivery
 slot. Do not infer production date, create plans, or write to Odoo. Preserve
 per-store traceability even when a SKU's template mapping changes later.
 """
+from collections import defaultdict
+
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Sum, Case, When, Value, IntegerField
 from django.db.models.functions import Coalesce
@@ -16,6 +18,39 @@ from rest_framework.response import Response
 from .models import (
     ProductionAssignment, Schedule, StoreOrder, StoreOrderLine, Warehouse,
 )
+
+
+def _quantity_display(value):
+    """Show integer Decimal totals without trailing .0000; never round fractions."""
+    if value is None:
+        return "0"
+    return str(int(value)) if value == value.to_integral_value() else str(value)
+
+
+def _product_uom(value):
+    """Use synced Odoo product UoM, with pcs only when the master is blank."""
+    return (value or "").strip() or "pcs"
+
+
+def _order_uom_map(order_ids):
+    """Find one shared UoM for each order, or None for mixed UoMs.
+
+    Query only the displayed page of orders and avoid N+1 product requests.
+    """
+    names_by_order = defaultdict(dict)
+    if order_ids:
+        for order_id, raw_uom in StoreOrderLine.objects.filter(
+            order_id__in=order_ids
+        ).values_list("order_id", "product__uom"):
+            name = _product_uom(raw_uom)
+            names_by_order[order_id].setdefault(name.casefold(), name)
+    return {
+        order_id: (
+            next(iter(names_by_order[order_id].values()))
+            if len(names_by_order[order_id]) == 1 else None
+        )
+        for order_id in order_ids
+    }
 
 
 class ProductionDemandQuery(serializers.Serializer):
@@ -108,6 +143,7 @@ def production_demand(request):
             "product_id": line.product_id,
             "sku": line.product.sku,
             "name": line.product.name,
+            "uom": _product_uom(line.product.uom),
             "qty_total": 0,
             "sources": [],
         })
@@ -143,6 +179,8 @@ def production_demand(request):
         item["qty_total"] = str(item["qty_total"])
         item["store_count"] = len({s["store_code"] for s in item["sources"]})
 
+    recap_uoms = {entry["uom"].casefold(): entry["uom"] for entry in items}
+
     return Response({
         "delivery_date": delivery_date.isoformat(),
         "kitchen": {"code": kitchen.code, "name": kitchen.name},
@@ -159,6 +197,7 @@ def production_demand(request):
             "stores_in_production": status_counts[StoreOrder.Status.PROSES_PRODUKSI],
             "sku_count": len(items),
             "qty_total": str(total_units),
+            "qty_uom": next(iter(recap_uoms.values())) if len(recap_uoms) == 1 else None,
         },
         "store_statuses": store_statuses,
         "items": items,
@@ -186,6 +225,7 @@ def recent_final_store_orders(request):
         )
         .order_by("-recent_at", "-pk")[:30]
     )
+    recent_uoms = _order_uom_map([order.pk for order in orders])
     return Response({
         "limit": 30,
         "items": [
@@ -201,7 +241,8 @@ def recent_final_store_orders(request):
                 "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
                 "auto_submitted": order.auto_submitted,
                 "sku_count": order.line_count,
-                "qty_total": str(order.qty_total or 0),
+                "qty_total": _quantity_display(order.qty_total),
+                "qty_uom": recent_uoms[order.pk],
             }
             for order in orders
         ],
@@ -261,6 +302,7 @@ def production_inbox(request):
         [start:start + page_size]
     )
 
+    inbox_uoms = _order_uom_map([order.pk for order in orders])
     return Response({
         "status_filter": selected,
         "page": page,
@@ -284,7 +326,8 @@ def production_inbox(request):
                 "schedule_code": order.schedule.code,
                 "schedule_name": order.schedule.name,
                 "sku_count": order.line_count,
-                "qty_total": str(order.qty_total or 0),
+                "qty_total": _quantity_display(order.qty_total),
+                "qty_uom": inbox_uoms[order.pk],
                 "auto_submitted": order.auto_submitted,
             }
             for order in orders
