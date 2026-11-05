@@ -92,3 +92,17 @@ Buka:
 - **Django Admin:** `http://localhost:900/admin/`
 
 Untuk pertama kali uji melalui superuser Django. Nanti buat akun Admin Produksi sendiri melalui Django Admin → Users → Groups `PRODUCTION`.
+
+## Mengapa pesanan KIRIM tidak terlihat di rekap?
+
+Rekap memakai **tiga filter yang harus persis cocok** dengan Store Order: `delivery_date`, `kitchen`, dan `schedule`. Tanggal default di frontend adalah H+2 **hari ini (WIB)**, bukan otomatis tanggal pesanan terakhir. Misalnya pesanan T_BAN sudah `KIRIM` untuk 7 November dengan jadwal Pagi, tetapi layar melihat 8 November Subuh, maka toko terlihat **Belum membuat pesanan** untuk lingkup yang sedang dipilih. Data lama tidak hilang.
+
+Untuk menghindari tebak-tebakan, halaman `/produksi/` kini memiliki panel **Temukan Pesanan yang Sudah Kirim** yang memuat hingga 30 Store Order `KIRIM` terbaru lintas tanggal/dapur/jadwal. Tombol **Lihat rekap** pada baris pesanan menyesuaikan ketiga filter sekaligus dan menampilkan konsolidasi yang tepat. Panel otomatis terbuka jika rekap sedang tidak memiliki toko KIRIM.
+
+API helper khusus Admin Produksi (hanya baca):
+```http
+GET /api/v1/production/recent-orders/
+```
+Memperlihatkan ID Order, nama/kode toko, dapur, tanggal dan jadwal kirim, jumlah SKU, total Qty, serta auto/manual submit. Data ini **tidak mengubah pesanan** dan tidak membuat MO. Hanya 30 pesanan terbaru yang ditampilkan; jika order lebih lama tidak masuk daftar, cari di Django Admin → Store orders.
+
+Jika pesanan KIRIM tidak terlihat di daftar mana pun, periksa `Store orders` pada `/admin/` untuk memastikan status dan nilai tanggal/dapur/jadwal; pertimbangkan juga apakah container menggunakan database PostgreSQL yang sama. Hasil CI bukan bukti isi database tenant lokal.
