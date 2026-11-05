@@ -6,6 +6,7 @@ owned by middleware. Missing Excel rows are deliberately not removed.
 """
 from dataclasses import dataclass
 from io import BytesIO
+from zipfile import BadZipFile
 
 from django.db import transaction
 from openpyxl import load_workbook
@@ -140,13 +141,13 @@ def preview_xlsx(kitchen, file_obj):
             except ValueError as exc:
                 errors.append(f"Baris {excel_row_num}: {exc}")
         workbook.close()
-    except (InvalidFileException, OSError, ValueError) as exc:
+    except (InvalidFileException, BadZipFile, OSError, ValueError) as exc:
         if isinstance(exc, ValueError) and (
             str(exc).startswith("File Excel") or str(exc).startswith("Kolom SKU")
             or str(exc).startswith("Maksimal")
         ):
             raise
-        if isinstance(exc, (OSError, InvalidFileException)):
+        if isinstance(exc, (OSError, InvalidFileException, BadZipFile)):
             raise ValueError("File bukan Excel .xlsx yang valid.") from None
         raise
 
