@@ -62,7 +62,7 @@ Hanya koneksi ke middleware; **tidak ada transaksi write ke Odoo** pada workspac
 - **Frontend dibangun dari source** di `frontend/`; keluaran build disalin ke Django template dan static dir di image Docker.
 
 ## Ruang lingkup / batasan
-- **Auto-submit Draft H-2 pukul 07.00 WIB belum diimplementasikan.** Tetap kebutuhan V1 tahap berikutnya.
+- **Auto-submit H-2 07.00 WIB telah diimplementasikan pada backend dan tersedia contoh systemd timer**, tetapi timer **belum diaktifkan di server**. Input Draft setelah cutoff dan recovery downtime belum diputuskan. Lihat [panduan](./AUTO-SUBMIT-H-2.md).
 - Belum ada konsolidasi MO dan transfer ke Odoo dari frontend ini.
 - Django runserver + staticfiles saat ini **hanya untuk development lokal**; sebelum akses publik/production perlu reverse proxy, HTTPS, static server dan service WSGI yang sesuai.
 - Daftar jadwal dibuat sekali dengan `seed_order_schedules` jika belum ada; perintah tidak mengganti konfigurasi jadwal yang telah dimodifikasi.
@@ -73,3 +73,6 @@ Hanya koneksi ke middleware; **tidak ada transaksi write ke Odoo** pada workspac
 - API tetap memvalidasi agar klien lain tidak bisa mengirim Qty pecahan. Contoh `1` diterima, `1.5` ditolak dengan HTTP 400.
 - Qty desimal dari Draft versi lama ditampilkan untuk dikoreksi manual sebelum Kirim; middleware **tidak membulatkan otomatis**.
 - Nilai Qty disimpan pada skema lama Decimal(18,4); perubahan ini **tidak membutuhkan migration DB** dan tidak memengaruhi perhitungan bahan baku.
+
+## Label auto-submit pada Workspace Toko
+Setelah suatu Draft difinalisasi oleh perintah H-2, GET pesanan mengembalikan `auto_submitted=true`. Header order menampilkan **Terkirim otomatis** atau **No Order otomatis** dan seluruh Qty terkunci. Kode backend/timer hanya dijalankan setelah administrator mengaktifkan service pada Debian sesuai [panduan Auto-submit](./AUTO-SUBMIT-H-2.md).
