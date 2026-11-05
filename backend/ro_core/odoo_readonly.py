@@ -21,6 +21,7 @@ class OdooReadOnlyClient:
         "product.product",
         "mrp.bom",
         "mrp.bom.line",
+        "stock.picking.type",
     })
 
     def __init__(self, base_url, api_key, database="", timeout=30):

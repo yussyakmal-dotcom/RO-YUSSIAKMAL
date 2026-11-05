@@ -200,3 +200,9 @@ CREATE INDEX idx_odoo_document_state ON odoo_document (state);
 - Django migration akan membuat constraint/index sesuai model; SQL ini adalah referensi desain. Jangan menerapkan SQL dan migrations secara paralel.
 - Output per SKU, konversi UoM, product variants/template, handling BoM alternatif, dan cara menentukan `stock_available` Odoo masih perlu verifikasi sebelum integrasi nyata.
 - Batas Draft untuk **DO** masih belum dikonfirmasi, jangan mengotomatisasi konfirmasi DO.
+
+## Koreksi 2026-11-05 — Routing MO berdasarkan Operation Type
+- **Product Category bukan sumber assignment dapur.** Dalam tenant ini lokasi produksi MO dipilih melalui Manufacturing Operation Type (`mrp.production.picking_type_id` → `stock.picking.type`).
+- `ProductionAssignment` yang ada adalah *default planning assignment* internal saja; asal pengisian awal belum diputuskan.
+- **Belum ada migrasi baru:** inspeksi Operation Type Odoo dilakukan read-only. Jika model konfigurasi mapping `Warehouse → picking_type_id` nantinya disetujui, tambahkan field atau tabel kecil melalui Django migration; jangan menebak dari kategori.
+- Saat integrasi create MO dibuat, tipe operasi yang cocok harus eksplisit, bukan mengandalkan default Odoo yang bisa salah warehouse.

@@ -40,7 +40,7 @@
 | D-032 | ✅ | Ada empat workspace: Toko, Produksi, Packing, Administrator | RBAC/UX |
 | D-033 | ✅ | Administrator dapat memakai seluruh workspace dan semua aksi untuk QA, tanpa menjadi operator harian | Superuser audit |
 | D-034 | ✅ | Odoo→middleware: SKU, BoM, warehouse, location, stok; middleware: mapping dapur, kapasitas, jadwal, minima dan order | Data ownership |
-| D-035 | ✅ | Mapping SKU→dapur diimpor dari Odoo **sekali awal**, perubahan setelahnya hanya di middleware | No overwrite |
+| D-035 | 🟡 | Mapping aktif SKU→dapur dimiliki middleware; metode impor/pengisian awal perlu ditetapkan dan tidak boleh menimpa perubahan manual | No overwrite |
 | D-036 | ✅ | Field Source Document dibangkitkan middleware: kode warehouse tanpa suffix /Stock, `YYMMDD`, counter mulai 10001 | Standard reference |
 | D-037 | ✅ | Counter reset **harian per warehouse**; tanggal yang dipakai adalah tanggal **pembuatan dokumen**, WIB | Sequence invariant |
 | D-038 | ✅ | PostgreSQL dalam Docker dipilih; frontend merujuk visual SAP (diterjemahkan sebagai Fiori/Horizon) | Stack/design direction |
@@ -113,8 +113,15 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - Lihat [hasil verifikasi connector](./ODOO-CONNECTOR.md#verifikasi-tenant-nyata--2026-11-05).
 
 ## Konfirmasi sumber mapping dapur — 2026-11-05
-- **D-042 (✅):** Pengguna menunjukkan layar daftar produk Odoo yang dikelompokkan berdasarkan *Product Category* dan menjelaskan bahwa **mapping dapur berasal dari kategori**. Terlihat secara eksplisit kategori **Legit**, **Paket**, dan **Pastry**.
-- **I-011 (✅ implementasi):** Perintah `init_kitchen_mapping` membuat mapping awal dari `Product.category` yang sudah tersinkron ke PostgreSQL, **default preview** dan `--apply` hanya untuk produk yang belum punya mapping.
-- **I-012 (usulan yang dapat diperiksa):** Label kategori lain yang sama persis dengan nama dapur dipetakan menurut daftar warehouse; belum dikonfirmasi secara visual, sehingga kategori tak cocok dibiarkan belum dipetakan dan harus diperiksa melalui preview.
-- **I-010 diperjelas:** Sumber mapping awal yang sebelumnya terbuka kini ditetapkan sebagai kategori produk Odoo. Pemetaan aktual di server **belum** dijalankan sampai pengguna memeriksa preview dan memilih `--apply`.
-- PRD dan [panduan connector](./ODOO-CONNECTOR.md#initial-mapping-sku--dapur-dari-product-category) telah diperbarui. Tidak perlu migration database baru.
+- **D-042 (❌ SUPERSEDED oleh D-043):** Pada awalnya ditafsirkan bahwa kategori produk Odoo menentukan dapur. Ini **keliru** dan telah dikoreksi pengguna: Product Category hanya pengelompokan.
+- **I-011 (❌ DIBATALKAN):** Perintah `init_kitchen_mapping` berbasis Product Category pernah dibuat, lalu dinonaktifkan. Tidak boleh digunakan untuk membuat mapping.
+- **I-012 (❌ DIBATALKAN):** Tebakan dapur dari nama kategori tidak digunakan.
+- **I-010 diperjelas lagi oleh D-043:** Metode initial assignment SKU belum disepakati; Odoo menentukan tempat produksi per MO menggunakan Operation Type.
+- PRD dan [panduan connector](./ODOO-CONNECTOR.md#verifikasi-manufacturing-operation-type) diperbaiki setelah koreksi.
+
+## Koreksi operasional — Operation Type pada MO (2026-11-05)
+- **D-043 (✅ KEPUTUSAN TERKINI):** Pengguna menegaskan penentuan dapur **saat pembuatan MO** didasarkan pada **Manufacturing Operation Type** Odoo, bukan Product Category. Dalam API Odoo direpresentasikan oleh `mrp.production.picking_type_id`, yang mengacu `stock.picking.type`.
+- **D-044 (✅ keselamatan perubahan):** Pemetaan kategori otomatis merupakan salah tafsir; prosedur `init_kitchen_mapping` dinonaktifkan dan kode kategori dihapus. Tidak ada pengubahan mapping yang sudah tersimpan secara otomatis.
+- **I-013 (✅ implementasi diagnostik):** Perintah `odoo_mo_operation_types` hanya membaca daftar operation types manufaktur yang terkait warehouse Odoo, sebagai dasar konfigurasi mapping eksplisit ke dapur.
+- **O-012 (❓ terbuka):** Bagaimana aturan *default kitchen* untuk daftar pesanan toko ditentukan ketika produk belum mempunyai MO—dipilih admin secara manual atau diturunkan dari referensi MO historis? Penentuan lokasi pada MO sendiri tetap dari Operation Type.
+- **O-013 (❓ terbuka):** Pastikan ID Operation Type 10 dapur dan Packing, terutama operasi perakitan PAKET, sesuai konfigurasi Odoo tenant sebelum middleware membuat Draft MO.
