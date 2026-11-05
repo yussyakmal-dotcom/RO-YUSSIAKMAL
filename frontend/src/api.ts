@@ -2,7 +2,7 @@ export type NamedOption = { code: string; name: string };
 export type KitchenOption = NamedOption & { item_count: number };
 
 export interface SessionInfo {
-  user: { username: string; full_name: string; admin: boolean };
+  user: { username: string; full_name: string; admin: boolean; can_access_production: boolean; can_access_store: boolean };
   stores: NamedOption[];
   kitchens: KitchenOption[];
   schedules: NamedOption[];
@@ -144,4 +144,56 @@ export async function sendOrder(orderId: number): Promise<SendResult> {
     method: "POST",
     body: JSON.stringify({}),
   });
+}
+
+export type ProductionStoreStatus = "KIRIM" | "NO_ORDER" | "DRAFT" | "NOT_ENTERED";
+
+export interface ProductionDemand {
+  delivery_date: string;
+  kitchen: NamedOption;
+  schedule: NamedOption;
+  basis: "FINAL_KIRIM_ONLY";
+  production_date: null;
+  note: string;
+  summary: {
+    stores_total: number;
+    stores_sent: number;
+    stores_no_order: number;
+    stores_draft: number;
+    stores_not_entered: number;
+    sku_count: number;
+    qty_total: string;
+  };
+  store_statuses: {
+    store_code: string;
+    store_name: string;
+    status: ProductionStoreStatus;
+    order_id: number | null;
+    auto_submitted: boolean;
+  }[];
+  items: {
+    product_id: number;
+    sku: string;
+    name: string;
+    qty_total: string;
+    store_count: number;
+    sources: {
+      store_code: string;
+      store_name: string;
+      order_id: number;
+      qty: string;
+      auto_submitted: boolean;
+    }[];
+  }[];
+}
+
+export function loadProductionDemand(
+  params: { delivery_date: string; kitchen_code: string; schedule_code: string },
+  signal?: AbortSignal,
+): Promise<ProductionDemand> {
+  const query = new URLSearchParams(params);
+  return apiRequest<ProductionDemand>(
+    "/api/v1/production/demand/?" + query.toString(),
+    { signal },
+  );
 }
