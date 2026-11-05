@@ -386,3 +386,6 @@ a { color: #1769af; }
   .production-recap-sources { padding-left: 26px; }
   .production-recap-footer { padding: 13px 15px; }
 }
+
+/* Never let an invalid historical fractional quantity look like a valid order. */
+.production-inbox-table td small.production-qty-warning { color: #a63232; font-weight: 800; }
