@@ -109,3 +109,8 @@ Pengguna telah menjalankan perintah berikut di server Debian dan melaporkan hasi
 - Produk dengan kandidat BoM ambigu: **0**.
 
 **Batas interpretasi hasil:** angka 957 adalah jumlah record BoM yang dibaca, **bukan** bukti semua SKU punya BoM ataupun setiap SKU telah dipetakan ke dapur. Sinkronisasi rutin ini tidak memodifikasi `ProductionAssignment`. Sumber *default assignment* SKU → dapur belum dipilih; routing MO menggunakan Operation Type Odoo, **bukan kategori**. Read-only connector terverifikasi pada tenant nyata untuk probe dan master import, belum untuk stok live/transaksi MO/DO.
+
+## Koreksi terbaru: template pesanan manual per dapur
+Pengguna memutuskan **SKU untuk daftar pemesanan toko dikelola manual menggunakan template Excel per dapur di middleware**. Tidak menggunakan Product Category atau auto-penugasan dari Odoo. Master SKU/nama/BoM tetap disinkron dari Odoo; template dan aktif/nonaktifnya tetap milik middleware. Penentuan lokasi manufaktur **saat MO dibuat** tetap berdasarkan Operation Type Odoo.
+
+Lihat [Template Pemesanan per Dapur](./TEMPLATE-PEMESANAN.md). Perintah `init_kitchen_mapping` berbasis kategori tetap dinonaktifkan.
