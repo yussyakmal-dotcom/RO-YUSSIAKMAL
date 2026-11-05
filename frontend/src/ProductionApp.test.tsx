@@ -36,14 +36,14 @@ const inbox: ProductionInbox = {
       order_id: 1, status: "KIRIM", store_code: "T_BAN",
       store_name: "Toko Bandara", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
-      schedule_name: "Subuh", sku_count: 18, qty_total: "1232",
+      schedule_name: "Subuh", sku_count: 18, qty_total: "1232.0000", qty_uom: "pcs",
       auto_submitted: false,
     },
     {
       order_id: 2, status: "KIRIM", store_code: "T_KD",
       store_name: "Toko Kedaton", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
-      schedule_name: "Subuh", sku_count: 6, qty_total: "413",
+      schedule_name: "Subuh", sku_count: 6, qty_total: "413.0000", qty_uom: "pcs",
       auto_submitted: false,
     },
   ],
@@ -58,11 +58,11 @@ const recap: ProductionDemand = {
   note: "Baca saja",
   summary: {
     stores_total: 2, stores_sent: 2, stores_in_production: 0,
-    sku_count: 1, qty_total: "1645",
+    sku_count: 1, qty_total: "1645", qty_uom: "pcs", qty_uom: "pcs",
   },
   store_statuses: [],
   items: [{
-    product_id: 10, sku: "10005", name: "Risoles Mayo",
+    product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs",
     qty_total: "1645", store_count: 2,
     sources: [
       { store_code: "T_BAN", store_name: "Toko Bandara", order_id: 1, qty: "1232", status: "KIRIM", auto_submitted: false },
@@ -100,6 +100,35 @@ afterEach(() => {
 });
 
 describe("Admin Produksi rekap modal", () => {
+  it("formats decimal-zero Qty as integers and displays original product UoM", async () => {
+    vi.mocked(loadProductionDemand).mockResolvedValue({
+      ...recap,
+      summary: { ...recap.summary, qty_total: "120.0000", qty_uom: "Lusin" },
+      items: [{
+        ...recap.items[0], uom: "Lusin", qty_total: "120.0000",
+        sources: [{ ...recap.items[0].sources[0], qty: "120.0000" }],
+      }],
+    });
+    render(<ProductionApp />);
+    await screen.findAllByRole("button", { name: "Lihat rekap" });
+    expect(screen.getByText("1.232 pcs")).toBeTruthy();
+    expect(screen.getByText("413 pcs")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Lihat rekap" })[0]);
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(dialog.textContent).toContain("120 Lusin"));
+    expect(dialog.textContent).not.toContain("120.0000");
+  });
+
+  it("does not pretend a mixed-UoM order has a single pcs unit", async () => {
+    vi.mocked(loadProductionInbox).mockResolvedValue({
+      ...inbox,
+      items: [{ ...inbox.items[0], qty_uom: null }],
+    });
+    render(<ProductionApp />);
+    await screen.findByText("1.232 beragam UoM");
+    expect(screen.queryByText("1.232 pcs")).toBeNull();
+  });
+
   it("keeps the inbox in place, renders scope recap, and restores focus on close", async () => {
     render(<ProductionApp />);
     const triggers = await screen.findAllByRole("button", { name: "Lihat rekap" });
