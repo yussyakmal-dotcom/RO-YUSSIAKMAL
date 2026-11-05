@@ -19,15 +19,12 @@ export function deliveryDateInWib(daysFromToday = 2): string {
 }
 
 export function normalizeQty(qty: string): string | null {
-  const value = qty.trim().replace(",", ".");
+  const value = qty.trim();
   if (value === "") return "0";
-  // 18 digits total, four decimal places as supported by Django DecimalField.
-  const parts = value.split(".");
-  if (!/^\d+$/.test(parts[0]) || parts[0].length > 14 || parts.length > 2) {
-    return null;
-  }
-  if (parts.length === 2 && !/^\d{0,4}$/.test(parts[1])) return null;
-  return value.endsWith(".") ? value.slice(0, -1) : value;
+  // Admin Toko orders only whole units. Database allows 14 integer digits.
+  if (!/^\d+$/.test(value)) return null;
+  const significant = value.replace(/^0+/, "") || "0";
+  return significant.length <= 14 ? significant : null;
 }
 
 export function hasPositiveQty(value: string): boolean {
