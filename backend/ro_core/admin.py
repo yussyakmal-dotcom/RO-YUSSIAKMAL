@@ -51,6 +51,17 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
     def product_name(self, obj):
         return obj.product.name
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "kitchen":
+            kwargs["queryset"] = models.Warehouse.objects.filter(
+                kind__in=("KITCHEN", "PACKING"), active=True,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def has_delete_permission(self, request, obj=None):
+        # Turn off items via is_active; preserve mapping/history instead of deleting.
+        return False
+
     def save_model(self, request, obj, form, change):
         previous = None
         if change:
