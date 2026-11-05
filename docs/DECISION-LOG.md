@@ -195,3 +195,8 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **O-018 (batas fitur):** Tombol konsolidasi dan transisi status otomatis baru akan dibuat bersamaan dengan implementasi **ProductionPlan nyata**; belum boleh mengganti status hanya karena operator membuka rekap. Tanggal produksi/SOP lintas tengah malam tetap belum ditetapkan.
 - **Koreksi I-033/I-034/I-038/I-039:** Desain default rekap berdasarkan filter dan panel pencarian KIRIM terbaru telah digantikan oleh antrean pesanan global. Endpoint lama boleh tetap untuk kompatibilitas tetapi UI utama tidak memakainya.
 - Lihat [alur terbaru Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Navigasi rekap tanpa kehilangan konteks — 2026-11-06
+- **D-054 (✅ UX dari pengguna):** Tombol **Lihat rekap** di Admin Produksi membuka pop-up/modal di atas daftar antrean, bukan mengganti halaman atau menambahkan rincian panjang di bawahnya. Setelah ditutup pengguna tetap berada di daftar dan baris semula.
+- **I-043 (✅):** React memakai native HTML `dialog`, fokus dialihkan ke tombol tutup, Escape/klik backdrop/tombol menutup modal, dan fokus dikembalikan ke tombol yang tadi membuka rekap. Filter/pagination/scroll antrean dipertahankan; rekap loading/error ada di dalam modal.
+- **I-044 (✅ tes frontend):** Tambahkan unit interaction tests untuk buka rekap, tutup rekap, Escape dan pengembalian fokus via Vitest/jsdom di CI.
