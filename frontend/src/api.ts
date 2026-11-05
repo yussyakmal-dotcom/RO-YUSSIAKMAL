@@ -130,7 +130,7 @@ export async function saveDraft(
 ): Promise<StoreOrder> {
   const items = Object.entries(quantities).map(([product_id, qty]) => ({
     product_id: Number(product_id),
-    qty: qty.trim().replace(",", ".") || "0",
+    qty: qty.trim() || "0",
   }));
   return apiRequest<StoreOrder>("/api/v1/store-orders/", {
     method: "POST",
