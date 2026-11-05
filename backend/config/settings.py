@@ -49,6 +49,15 @@ DATABASES = {"default": {
     "HOST": os.getenv("POSTGRES_HOST", "db"),
     "PORT": os.getenv("POSTGRES_PORT", "5432"),
 }}
+# Workspace API uses cookie-backed Django session, not HTTP Basic credentials.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
 LANGUAGE_CODE = "id"
 TIME_ZONE = "Asia/Jakarta"
 USE_I18N = True
