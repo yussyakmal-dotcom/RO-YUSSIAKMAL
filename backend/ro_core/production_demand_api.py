@@ -54,41 +54,33 @@ def production_demand(request):
         schedule=schedule,
         delivery_date=delivery_date,
         store__kind=Warehouse.Kind.STORE,
+        status__in=(StoreOrder.Status.KIRIM, StoreOrder.Status.PROSES_PRODUKSI),
     )
-    headers = {
-        order.store_id: order
-        for order in order_scope.select_related("store").order_by("store__code")
-    }
-    stores = list(
-        Warehouse.objects.filter(kind=Warehouse.Kind.STORE, active=True)
-        .order_by("code")
+    headers = list(
+        order_scope.select_related("store").order_by("store__code", "pk")
     )
     status_counts = {
-        StoreOrder.Status.KIRIM: 0,
-        StoreOrder.Status.PROSES_PRODUKSI: 0,
-        StoreOrder.Status.NO_ORDER: 0,
-        StoreOrder.Status.DRAFT: 0,
-        "NOT_ENTERED": 0,
+        StoreOrder.Status.KIRIM: sum(
+            order.status == StoreOrder.Status.KIRIM for order in headers
+        ),
+        StoreOrder.Status.PROSES_PRODUKSI: sum(
+            order.status == StoreOrder.Status.PROSES_PRODUKSI for order in headers
+        ),
     }
-    store_statuses = []
-    for store in stores:
-        order = headers.get(store.pk)
-        label = order.status if order else "NOT_ENTERED"
-        status_counts[label] += 1
-        store_statuses.append({
-            "store_code": store.code,
-            "store_name": store.name,
-            "status": label,
-            "order_id": order.pk if order else None,
-            "auto_submitted": order.auto_submitted if order else False,
-        })
+    store_statuses = [
+        {
+            "store_code": order.store.code,
+            "store_name": order.store.name,
+            "status": order.status,
+            "order_id": order.pk,
+            "auto_submitted": order.auto_submitted,
+        }
+        for order in headers
+    ]
 
     lines = list(
-        StoreOrderLine.objects.filter(
-            order__in=order_scope.filter(status__in=(
-                StoreOrder.Status.KIRIM, StoreOrder.Status.PROSES_PRODUKSI,
-            ))
-        ).select_related("product", "order__store")
+        StoreOrderLine.objects.filter(order__in=order_scope)
+        .select_related("product", "order__store")
         .order_by("product__sku", "product_id", "order__store__code", "order_id")
     )
 
@@ -162,12 +154,9 @@ def production_demand(request):
             "tanggal dan jadwal kirim; bukan ProductionPlan atau MO."
         ),
         "summary": {
-            "stores_total": len(stores),
+            "stores_total": len(headers),
             "stores_sent": status_counts[StoreOrder.Status.KIRIM],
             "stores_in_production": status_counts[StoreOrder.Status.PROSES_PRODUKSI],
-            "stores_no_order": status_counts[StoreOrder.Status.NO_ORDER],
-            "stores_draft": status_counts[StoreOrder.Status.DRAFT],
-            "stores_not_entered": status_counts["NOT_ENTERED"],
             "sku_count": len(items),
             "qty_total": str(total_units),
         },
