@@ -121,7 +121,7 @@ class OdooMasterTest(TestCase):
         apply_master(ws, locations, products, preview)
         bread = Product.objects.get(odoo_id=301)
         paket = Product.objects.get(odoo_id=302)
-        self.assertEqual(str(bread.bom_output_qty), "200")
+        self.assertEqual(bread.bom_output_qty, Decimal("200"))
         self.assertEqual(paket.bom_components[0]["odoo_product_id"], 301)
         self.assertEqual(paket.bom_components[0]["qty"], "2")
         kitchen = Warehouse.objects.get(code="ROTI")
