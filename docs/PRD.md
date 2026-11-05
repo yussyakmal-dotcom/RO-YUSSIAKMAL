@@ -174,3 +174,12 @@ SOP mengatur waktu dan eksekusi; middleware menyimpan asosiasi jadwal dan tangga
 - Akses khusus Group PRODUCTION/ADMIN/superuser, tanpa hak mengedit pesanan toko.
 - Tahap ini **read-only**: tidak membuat ProductionPlan, tidak memanggil API tulis Odoo. **Tanggal produksi dan jadwal produksi belum otomatis diturunkan** dari tanggal/jadwal pengiriman sampai SOP-nya ditetapkan.
 - Detail pengujian: [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Koreksi final Workspace Admin Produksi (2026-11-06)
+- **Inbox pertama kali membuka SEMUA pesanan yang berstatus KIRIM atau PROSES_PRODUKSI**, tanpa filter tanggal/dapur/jadwal default, dan dapat difilter per status. Pagination mencegah pesanan lama tidak terlihat.
+- Tidak menampilkan Draft/No Order di Workspace Admin Produksi. Draft tetap milik Admin Toko.
+- **KIRIM** = permintaan diserahkan toko, menunggu konsolidasi. **PROSES_PRODUKSI** = permintaan sudah masuk konsolidasi rencana produksi. Semua Qty/asal toko tetap terlacak dan read-only bagi toko.
+- Ketika membuat ProductionPlan sungguhan, transisi `KIRIM → PROSES_PRODUKSI` dilakukan **dalam transaksi konsolidasi berhasil**, bukan sebagai perubahan status tanpa artefak perencanaan.
+- Rincian per tanggal kirim, dapur, dan jadwal dapat dibuka dari baris antrean (bukan syarat awal agar pesanan terlihat). Rekap dapat menghitung kedua status sekali per order.
+- Status `PROSES_PRODUKSI` disiapkan pada DB dan API, tetapi **belum dapat ditransisikan melalui frontend** hingga fitur konsolidasi ProductionPlan dibangun. Tidak ada write ke Odoo.
+- Referensi implementasi [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
