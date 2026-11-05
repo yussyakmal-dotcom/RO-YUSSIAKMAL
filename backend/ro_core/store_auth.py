@@ -6,6 +6,7 @@ No OAuth, bearer token storage, or duplicate user database required for V1.
 import json
 
 from django.contrib.auth import authenticate, login, logout
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
@@ -40,6 +41,14 @@ def session_info(request):
         stores = stores.filter(userwarehouseaccess__user=request.user).distinct()
     kitchens = Warehouse.objects.filter(
         kind__in=("KITCHEN", "PACKING"), active=True
+    ).annotate(
+        item_count=Count(
+            "productionassignment",
+            filter=Q(
+                productionassignment__is_active=True,
+                productionassignment__product__active=True,
+            ),
+        ),
     ).order_by("name")
     schedules = Schedule.objects.filter(active=True).order_by("sort_order", "code")
 
@@ -50,7 +59,7 @@ def session_info(request):
             "admin": admin,
         },
         "stores": list(stores.order_by("name").values("code", "name")),
-        "kitchens": list(kitchens.values("code", "name")),
+        "kitchens": list(kitchens.values("code", "name", "item_count")),
         "schedules": list(schedules.values("code", "name")),
     })
 
