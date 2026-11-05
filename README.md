@@ -119,3 +119,9 @@ API read-only: `GET /api/v1/production/demand/?delivery_date=2026-11-08&kitchen_
 git pull origin main
 docker compose up -d --build --force-recreate api
 ```
+
+### Jika pesanan KIRIM tidak muncul di rekap produksi
+
+Buka `http://localhost:900/produksi/` dan panel **Temukan Pesanan yang Sudah Kirim**. Daftar ini menampilkan pesanan KIRIM terbaru lintas tanggal, dapur, dan jadwal. Klik **Lihat rekap** agar ketiga filter sesuai dengan pesanan tersebut. **Tanggal awal H+2 bukan otomatis tanggal Kirim terakhir.** Jika tidak ada di 30 pesanan terbaru, cek Django Admin → Store orders.
+
+API pendukung (auth PRODUCTION/ADMIN, read-only): `GET /api/v1/production/recent-orders/`. Tidak ada migrasi atau perubahan data pesanan. Baca [panduan rekap](docs/WORKSPACE-ADMIN-PRODUKSI.md).

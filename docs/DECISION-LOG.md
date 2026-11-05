@@ -180,3 +180,8 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **O-016 (❓ terbuka):** Penetapan `production_date` dan `production_schedule` dari tanggal/jadwal kirim, terutama produksi yang melewati tengah malam, harus dikonfirmasi sebelum membuat ProductionPlan. API rekap saat ini `production_date = null`.
 - **I-037 (✅ batas):** Tahap ini hanya melihat kebutuhan SKU, **belum** memutuskan Qty produksi, pembulatan batch, kapasitas, stok bahan, atau MO Draft. Masalah auto-submit late Draft (O-014) tetap belum diselesaikan.
 - Rujukan: [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md).
+
+## Diagnostik rekap produksi — 2026-11-06
+- **I-038 (✅ UX):** User melaporkan pesanan Toko Bandara/Kedaton sudah KIRIM, tetapi tidak tampak di rekap produksi. Pemeriksaan kode menunjukkan rekap memerlukan kecocokan **tanggal kirim + dapur + jadwal** persis, sedangkan frontend mengisi default H+2 dan jadwal pertama; data yang tidak cocok tampak NOT_ENTERED pada lingkup yang dipilih.
+- **I-039 (✅ solusi diagnostik):** Tambah API read-only Group PRODUCTION/ADMIN `/api/v1/production/recent-orders/` (maksimal 30 KIRIM terbaru dari semua lingkup) dan panel **Temukan Pesanan yang Sudah Kirim**. Klik `Lihat rekap` menyelaraskan 3 filter tanpa mengubah data.
+- **O-017 (perlu verifikasi data nyata):** Filter tepat untuk pesanan Toko Bandara/Kedaton baru dapat dipastikan dari database Debian operator. Tidak ada akses langsung ke PostgreSQL tenant pengguna dari GitHub.

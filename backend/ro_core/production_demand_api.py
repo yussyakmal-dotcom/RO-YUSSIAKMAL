@@ -4,9 +4,9 @@ Aggregate ONLY final StoreOrder KIRIM by delivery date + kitchen + delivery
 slot. Do not infer production date, create plans, or write to Odoo. Preserve
 per-store traceability even when a SKU's template mapping changes later.
 """
-from collections import defaultdict
-
 from django.shortcuts import get_object_or_404
+from django.db.models import Count, Sum
+from django.db.models.functions import Coalesce
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
@@ -168,4 +168,47 @@ def production_demand(request):
         },
         "store_statuses": store_statuses,
         "items": items,
+    })
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def recent_final_store_orders(request):
+    """Find real KIRIM scopes to navigate from rekap filters safely.
+
+    This is deliberately independent of date/kitchen/schedule selected in
+    the rekap. It is read-only, restricted to Production/Admin, and bounded.
+    """
+    _production_access(request.user)
+    orders = (
+        StoreOrder.objects.filter(
+            status=StoreOrder.Status.KIRIM,
+            store__kind=Warehouse.Kind.STORE,
+        )
+        .select_related("store", "kitchen", "schedule")
+        .annotate(
+            line_count=Count("lines"),
+            qty_total=Sum("lines__qty"),
+            recent_at=Coalesce("submitted_at", "created_at"),
+        )
+        .order_by("-recent_at", "-pk")[:30]
+    )
+    return Response({
+        "limit": 30,
+        "items": [
+            {
+                "order_id": order.pk,
+                "store_code": order.store.code,
+                "store_name": order.store.name,
+                "kitchen_code": order.kitchen.code,
+                "kitchen_name": order.kitchen.name,
+                "schedule_code": order.schedule.code,
+                "schedule_name": order.schedule.name,
+                "delivery_date": order.delivery_date.isoformat(),
+                "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
+                "auto_submitted": order.auto_submitted,
+                "sku_count": order.line_count,
+                "qty_total": str(order.qty_total or 0),
+            }
+            for order in orders
+        ],
     })

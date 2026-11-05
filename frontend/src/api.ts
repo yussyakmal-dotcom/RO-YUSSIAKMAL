@@ -197,3 +197,24 @@ export function loadProductionDemand(
     { signal },
   );
 }
+
+export interface RecentSentOrder {
+  order_id: number;
+  store_code: string;
+  store_name: string;
+  kitchen_code: string;
+  kitchen_name: string;
+  schedule_code: string;
+  schedule_name: string;
+  delivery_date: string;
+  submitted_at: string | null;
+  auto_submitted: boolean;
+  sku_count: number;
+  qty_total: string;
+}
+
+export function loadRecentSentOrders(signal?: AbortSignal): Promise<{ limit: number; items: RecentSentOrder[] }> {
+  return apiRequest<{ limit: number; items: RecentSentOrder[] }>(
+    "/api/v1/production/recent-orders/", { signal },
+  );
+}

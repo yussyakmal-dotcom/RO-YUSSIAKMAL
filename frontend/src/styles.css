@@ -236,3 +236,25 @@ a { color: #1769af; }
   .production-nav-link { font-size: 11px; padding: 6px; }
   .production-table .production-store-count { width: 100px; }
 }
+
+/* Diagnostics: discover KIRIM orders outside the selected production scope. */
+.production-recent-card { margin-bottom: 19px; overflow: hidden; }
+.production-recent-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 22px; }
+.production-recent-heading p { margin: 7px 0 0; font-size: 12px; color: #71849a; line-height: 1.5; }
+.production-recent-heading .btn { flex-shrink: 0; }
+.production-recent-body { padding: 0 22px 17px; }
+.production-recent-body > p { font-size: 12px; color: #687d92; }
+.production-recent-scroll { max-height: 345px; overflow: auto; border: 1px solid #e4ebf4; border-radius: 8px; }
+.production-recent-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 660px; }
+.production-recent-table th { background: #f4f8fc; color: #637b91; text-align: left; position: sticky; top: 0; padding: 10px 12px; white-space: nowrap; border-bottom: 1px solid #dce6f1; }
+.production-recent-table td { padding: 10px 12px; color: #3c546b; border-bottom: 1px solid #edf2f6; }
+.production-recent-table tr:last-child td { border-bottom: none; }
+.production-recent-table td strong { font-size: 12px; color: #244e71; display: block; margin-bottom: 3px; }
+.production-recent-table td small { font-size: 10px; color: #8a9bab; }
+.production-open-rekap { background: #e9f3fc; color: #1268ad; border-radius: 6px; border: 1px solid #c7dceb; font-weight: 700; font-size: 11px; padding: 8px 10px; white-space: nowrap; }
+.production-open-rekap:hover { background: #dbeefa; }
+.production-recent-footnote { color: #8899aa; font-size: 11px !important; margin: 10px 0 0; }
+@media (max-width: 730px) {
+  .production-recent-heading { flex-direction: column; align-items: stretch; padding: 17px; }
+  .production-recent-body { padding: 0 17px 17px; }
+}

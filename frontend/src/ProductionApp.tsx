@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoginPage } from "./App";
 import {
-  initializeSession, loadProductionDemand, logout,
-  type ProductionDemand, type ProductionStoreStatus, type SessionInfo,
+  initializeSession, loadProductionDemand, loadRecentSentOrders, logout,
+  type ProductionDemand, type ProductionStoreStatus, type RecentSentOrder, type SessionInfo,
 } from "./api";
 import { deliveryDateInWib } from "./utils";
 
@@ -34,6 +34,10 @@ function ProductionApp() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [recentOrders, setRecentOrders] = useState<RecentSentOrder[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentError, setRecentError] = useState("");
+  const [showRecent, setShowRecent] = useState(false);
 
   const setCurrentSession = (info: SessionInfo) => {
     setSession(info);
@@ -70,7 +74,10 @@ function ProductionApp() {
       { delivery_date: deliveryDate, kitchen_code: kitchenCode, schedule_code: scheduleCode },
       controller.signal,
     ).then((data) => {
-      if (!controller.signal.aborted) setReport(data);
+      if (!controller.signal.aborted) {
+        setReport(data);
+        if (data.summary.stores_sent === 0) setShowRecent(true);
+      }
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
         setError(err instanceof Error ? err.message : "Gagal memuat rekap.");
@@ -80,6 +87,32 @@ function ProductionApp() {
     });
     return () => controller.abort();
   }, [session, kitchenCode, scheduleCode, deliveryDate, refreshKey]);
+
+  useEffect(() => {
+    if (!session?.user.can_access_production) return;
+    const controller = new AbortController();
+    setRecentLoading(true);
+    setRecentError("");
+    loadRecentSentOrders(controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) setRecentOrders(data.items);
+      }).catch((err: unknown) => {
+        if (!controller.signal.aborted) {
+          setRecentError(err instanceof Error ? err.message : "Daftar pesanan tidak tersedia.");
+        }
+      }).finally(() => {
+        if (!controller.signal.aborted) setRecentLoading(false);
+      });
+    return () => controller.abort();
+  }, [session, refreshKey]);
+
+  const openRecentScope = (order: RecentSentOrder) => {
+    setDeliveryDate(order.delivery_date);
+    setKitchenCode(order.kitchen_code);
+    setScheduleCode(order.schedule_code);
+    setSearch("");
+    setShowRecent(false);
+  };
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -182,6 +215,46 @@ function ProductionApp() {
                     {loading ? "Memuat…" : "Muat Ulang"}
                   </button>
                 </div>
+              </section>
+
+              <section className="card production-recent-card">
+                <div className="production-recent-heading">
+                  <div>
+                    <div className="section-heading">Temukan Pesanan yang Sudah Kirim</div>
+                    <p>Lintas tanggal, dapur dan jadwal. Klik “Lihat rekap” untuk menyamakan filter dengan pesanan.</p>
+                  </div>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    onClick={() => setShowRecent((value) => !value)}
+                  >{showRecent ? "Tutup daftar" : "Lihat Kirim terbaru"}</button>
+                </div>
+                {showRecent && (
+                  <div className="production-recent-body">
+                    {recentLoading && <p>Memuat pesanan Kirim terbaru…</p>}
+                    {recentError && <div className="message error" role="alert">{recentError}</div>}
+                    {!recentLoading && !recentError && !recentOrders.length &&
+                      <p>Belum ada pesanan berstatus KIRIM di database middleware.</p>}
+                    {!recentLoading && !recentError && !!recentOrders.length && (
+                      <div className="production-recent-scroll">
+                        <table className="production-recent-table">
+                          <thead><tr><th>Toko</th><th>Tanggal Kirim</th><th>Dapur</th><th>Jadwal</th><th>SKU</th><th>Aksi</th></tr></thead>
+                          <tbody>{recentOrders.map((order) => (
+                            <tr key={order.order_id}>
+                              <td><strong>{order.store_name}</strong><small>#{order.order_id} · {order.store_code}</small></td>
+                              <td>{order.delivery_date}</td>
+                              <td>{order.kitchen_name}</td>
+                              <td>{order.schedule_name}</td>
+                              <td>{order.sku_count}</td>
+                              <td><button type="button" className="production-open-rekap" onClick={() => openRecentScope(order)}>Lihat rekap</button></td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="production-recent-footnote">Maksimal 30 pesanan KIRIM terbaru. Tidak ada perubahan data saat membuka rekap.</p>
+                  </div>
+                )}
               </section>
 
               {error && <div className="message error" role="alert"><strong>Rekap belum dapat ditampilkan:</strong> {error}</div>}
