@@ -148,7 +148,7 @@ Persyaratan implementasi saat simpan:
 - `GET /api/v1/production/consolidation/preview/` menerima `kitchen_code`, `delivery_date`, `delivery_schedule_code`, opsional `production_date` dan `production_schedule_code`. Hanya agregasi pesanan **KIRIM**, bukan PROSES_PRODUKSI; respons menampilkan Qty Pesan, kapasitas master, kapasitas terpakai dan tersisa, serta sumber toko.
 - `POST /api/v1/production/consolidations/` menerima lingkup, **tanggal dan jadwal produksi eksplisit**, `order_ids` hasil pratinjau, dan `items[{product_id,qty_planned}]`. Validasi server mengunci pesanan dan baris kapasitas, memeriksa ulang scope dan Qty, lalu menyimpan rencana, snapshot pesanan sumber, Qty kapasitas master/terpakai/kekurangan, AuditLog, serta status `KIRIM → PROSES_PRODUKSI` **dalam satu transaksi**. Permintaan ulang ditolak sebagai konflik, bukan membuat dua rencana.
 - `GET /api/v1/production/consolidations/{plan_id}/` menampilkan kembali rencana tersimpan beserta **kekurangan per SKU** dan asal toko. Inbox menyertakan `plan_id` sehingga tersedia aksi **Lihat Rencana**.
-- Di `/produksi/` ada aksi **Rencanakan** pada pesanan KIRIM, form penuh (bukan modal rekap), tabel **Qty Pesan | Kapasitas | Terpakai | Tersisa | Qty Produksi | Kekurangan**. Lihat Rekap tetap pop-up baca-saja.
+- Di `/produksi/` ada aksi **Rencanakan** dan **Lihat Rencana** yang **membuka modal native di atas antrean**, seperti **Lihat Rekap**. Rencanakan tetap berisi tabel lengkap **Qty Pesan | Kapasitas | Terpakai | Tersisa | Qty Produksi | Kekurangan** dalam area scroll modal; Lihat Rekap tetap pop-up baca-saja.
 - `ProductionPlanLine.qty_mo` dan `batch_qty` sekarang boleh `NULL` (berarti **belum dihitung**, bukan Qty palsu). `capacity_qty` merekam master, `capacity_used_before` merekam penggunaan pada slot itu sebelum rencana baru, `qty_shortfall` merekam selisih pesan-produksi.
 - `ProductionPlanSource.order` mempunyai relasi satu-ke-satu untuk anti-konsolidasi-ganda dan `lines_snapshot` menyimpan Qty/nama/SKU/UoM sumber. Constraint unik parsial menjaga satu scope pengiriman untuk rencana **baru**, sementara rencana historis dengan production_schedule NULL **tidak diberi slot tebakan** dan harus direkonsiliasi bila bentrok.
 
@@ -160,3 +160,10 @@ Persyaratan implementasi saat simpan:
 - `PROSES_PRODUKSI` berarti sudah masuk rencana dan **bukan** pemenuhan total kebutuhan; Qty Kekurangan harus tetap terlihat. Belum ada re-open, perubahan Qty rencana pascasimpan, aksi pengisian kekurangan ke toko, MO, BoM, kapasitas setelah pembulatan batch, atau Odoo write.
 
 **Acceptance test tambahan:** 500 Pcs requested + 400 Pcs capacity + 400 Pcs planned ⇒ plan tersimpan, shortage 100, order toko tetap SUBUH 500, prod schedule terpisah, MO/batch NULL; replay/overcapacity/missing-capacity/Qty pecahan ditolak tanpa rencana parsial, history menampilkan shortage.
+
+## 12. Keputusan UX: semua tindakan detail memakai modal (2026-11-06)
+- **DISEPAKATI:** Rencanakan Produksi dan Lihat Rencana mengikuti perilaku Lihat Rekap: pop-up/modal native di atas antrean, tanpa mengganti konten halaman, menambah panel panjang di bawah, atau membuka browser window.
+- Modal konsolidasi dibuat lebar, responsif, dan scroll sendiri; tabel SKU yang banyak tetap dapat dijelajahi tanpa menggeser daftar. Judul, tombol ×, dan footer Simpan/Tutup tetap mudah dijangkau.
+- Tutup dengan ×, Esc, backdrop, atau Batal/Tutup mengembalikan fokus ke tombol asal dan mempertahankan filter, pagination, scroll. **Tidak ada refresh inbox** jika modal ditutup tanpa menyimpan.
+- Setelah simpan, rencana tersimpan dan kekurangan terlihat dalam modal yang sama; refresh inbox dilakukan saat modal ditutup, kemudian fokus berpindah ke tombol Lihat Rencana pengganti (atau tab status jika baris keluar dari filter).
+- Menutup modal saat request simpan masih berlangsung dicegah, untuk menghindari kebingungan tentang hasil operasi. Aturan bisnis/API/DB konsolidasi **tidak berubah**.

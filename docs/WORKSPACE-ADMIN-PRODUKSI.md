@@ -113,7 +113,7 @@ Lihat [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1
 
 ## Menggunakan Konsolidasi Produksi V1
 
-1. Buka `/produksi/`; cari pesanan **KIRIM**, lalu klik **Rencanakan**. Semua KIRIM dengan dapur, tanggal kirim dan jadwal kirim sama akan digabung; bukan hanya toko pada baris yang diklik.
+1. Buka `/produksi/`; cari pesanan **KIRIM**, lalu klik **Rencanakan** untuk membuka **pop-up/modal di atas antrean** (bukan mengganti halaman atau membuat form di bawah tabel). Semua KIRIM dengan dapur, tanggal kirim dan jadwal kirim sama akan digabung; bukan hanya toko pada baris yang diklik.
 2. Pastikan **tanggal/jadwal kirim** terlihat read-only sesuai toko. Pilih **Tanggal Produksi** manual dan **Jadwal Produksi** pada field terpisah (tidak ada default).
 3. Tinjau **Qty Pesan, Kapasitas master, Terpakai, Tersisa** per SKU/UoM dan isi **Qty Produksi** sebagai bilangan bulat positif. Nilai maksimal Qty Pesan dan kapasitas tersisa.
 4. Contoh: diminta **500 Pcs**, kapasitas tersedia **400 Pcs**, diisi Qty Produksi **400 Pcs** → tabel menampilkan **Kekurangan 100 Pcs**. **Simpan Konsolidasi tetap boleh**, tanpa mengubah 500 Pcs/jadwal kirim toko.
@@ -150,3 +150,12 @@ docker compose exec api python manage.py migrate --noinput
 docker compose exec api python manage.py check
 ```
 **Migration 0004** tidak membuat jadwal produksi historis dari jadwal kirim; `production_schedule=NULL` pada plan lama berarti belum diketahui. ProdPlanLine batch/MO boleh NULL sampai tahap MO. Pastikan backup PostgreSQL sebelum migrasi skema.
+
+## Pola navigasi Rencanakan & Lihat Rencana — modal seperti Lihat Rekap
+
+- Tombol **Lihat Rekap**, **Rencanakan**, dan **Lihat Rencana** semuanya memakai native HTML `dialog` yang tampil **di atas halaman antrean**, bukan menambah konten di bawah, bukan pindah route, dan bukan membuka jendela browser baru.
+- Modal Rencanakan cukup besar untuk tabel kapasitas/Qty SKU yang banyak. Isi mempunyai **scroll vertikal sendiri** dan tabel dapat scroll horizontal pada layar sempit; header judul dan footer aksi tetap terlihat.
+- Saat modal dibuka, fokus pindah ke tombol ×. Tekan **×**, **Batal / Tutup**, **Esc**, atau klik luar modal untuk menutup. Saat ditutup tanpa simpan, fokus kembali ke tombol Rencanakan atau Lihat Rencana pada baris asal, tanpa reload/ubah filter/page/scroll antrean.
+- Bila **Simpan Konsolidasi** berhasil, modal berubah menjadi histori **Rencana Produksi #ID** tanpa membuang konteks antrean. Setelah modal ditutup, daftar dimuat ulang dan fokus diarahkan ke **Lihat Rencana** pada baris asal; jika baris hilang karena filter status, fokus ke tab filter aktif.
+- Saat penyimpanan sedang berjalan, tombol tutup dan tindakan Esc/backdrop tidak menutup dialog agar status penyimpanan tidak ambigu.
+- Seluruh perhitungan Qty, kapasitas, kekurangan, status dan histori **tidak berubah** karena perubahan UX modal ini. Tidak ada migrasi baru.

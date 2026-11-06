@@ -28,6 +28,10 @@ function ProductionApp() {
     order: ProductionInboxOrder; planId: number | null;
   } | null>(null);
   const consolidationOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const consolidationSavedRef = useRef(false);
+  const pendingPlanFocusRef = useRef<{
+    orderId: number; previousInbox: ProductionInbox | null;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -51,7 +55,8 @@ function ProductionApp() {
     const controller = new AbortController();
     setError("");
     setLoading(true);
-    setInbox(null);
+    // Keep the existing rows mounted during refresh, including while the
+    // planning modal is open. No scroll jumps or disappearing opener buttons.
     loadProductionInbox(filter, page, controller.signal).then((value) => {
       if (!controller.signal.aborted) setInbox(value);
     }).catch((err: unknown) => {
@@ -103,20 +108,54 @@ function ProductionApp() {
     });
   };
 
+  useEffect(() => {
+    const pending = pendingPlanFocusRef.current;
+    if (!pending || activeConsolidation || !inbox ||
+        inbox === pending.previousInbox) return;
+    pendingPlanFocusRef.current = null;
+    window.requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLTableRowElement>(
+        `tr[data-production-order-id="${pending.orderId}"]`
+      );
+      // A successful save changes KIRIM to PROSES_PRODUKSI. The original
+      // Rencanakan button may be replaced or disappear under the KIRIM tab.
+      const target = row?.querySelector<HTMLButtonElement>(".production-plan-trigger")
+        ?? document.querySelector<HTMLButtonElement>(
+          ".production-inbox-tabs .production-tab.selected"
+        );
+      target?.focus();
+    });
+  }, [inbox, activeConsolidation]);
+
   const openConsolidation = (
     order: ProductionInboxOrder, planId: number | null,
     opener: HTMLButtonElement,
   ) => {
     consolidationOpenerRef.current = opener;
+    consolidationSavedRef.current = false;
     setActiveConsolidation({ order, planId });
   };
 
   const closeConsolidation = () => {
     const opener = consolidationOpenerRef.current;
+    const wasSaved = consolidationSavedRef.current;
+    consolidationSavedRef.current = false;
+    if (wasSaved) {
+      // Only refresh after closing. The underlying list never navigates away;
+      // after refresh, focus the new Lihat Rencana button (or selected tab).
+      pendingPlanFocusRef.current = {
+        orderId: activeConsolidation?.order.order_id ?? 0,
+        previousInbox: inbox,
+      };
+    }
     setActiveConsolidation(null);
-    window.requestAnimationFrame(() => {
-      if (opener?.isConnected) opener.focus();
-    });
+    if (wasSaved) {
+      setRefresh((value) => value + 1);
+    } else {
+      window.requestAnimationFrame(() => {
+        if (opener?.isConnected) opener.focus();
+      });
+    }
   };
 
   const chooseFilter = (value: ProductionInboxFilter) => {
@@ -131,6 +170,7 @@ function ProductionApp() {
       await logout();
       setSession(null);
       setSelected(null);
+      setActiveConsolidation(null);
       setInbox(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal keluar.");
@@ -176,16 +216,6 @@ function ProductionApp() {
           <div className="sidebar-bottom">RO Middleware · V1</div>
         </aside>
         <main className="workspace">
-          {activeConsolidation ? (
-            <ProductionConsolidation
-              order={activeConsolidation.order}
-              planId={activeConsolidation.planId}
-              schedules={session.schedules}
-              onBack={closeConsolidation}
-              onSaved={() => setRefresh((value) => value + 1)}
-            />
-          ) : (
-          <>
           <div className="breadcrumb">Workspace <span>/</span> Admin Produksi <span>/</span> Antrean Pesanan</div>
           <div className="page-heading">
             <div>
@@ -217,15 +247,15 @@ function ProductionApp() {
                   </div>
                   <button type="button" className="btn btn-secondary" onClick={() => setRefresh((v) => v + 1)} disabled={loading}>Muat Ulang</button>
                 </div>
-                {loading && <div className="table-placeholder"><span className="spinner" /> Memuat antrean…</div>}
-                {!loading && inbox && (
+                {loading && !inbox && <div className="table-placeholder"><span className="spinner" /> Memuat antrean…</div>}
+                {inbox && (
                   <>
                     <div className="table-scroll">
                       <table className="production-inbox-table">
                         <thead><tr><th>ID / Toko</th><th>Tanggal Kirim</th><th>Dapur</th><th>Jadwal</th><th>SKU / Total Qty</th><th>Status</th><th>Aksi</th></tr></thead>
                         <tbody>
                           {inbox.items.map((order) => (
-                            <tr key={order.order_id}>
+                            <tr key={order.order_id} data-production-order-id={order.order_id}>
                               <td><strong>{order.store_name}</strong><small>Order #{order.order_id} · {order.store_code}</small></td>
                               <td>{order.delivery_date}</td>
                               <td>{order.kitchen_name}</td>
@@ -272,10 +302,17 @@ function ProductionApp() {
                   onClose={closeRecap}
                 />
               )}
-              <p className="production-note">Lihat Rekap tetap baca-saja. Rencanakan Produksi membuat rencana lokal, mencatat kekurangan, dan mengubah status pesanan setelah tersimpan atomik; belum membuat MO Odoo.</p>
+              <p className="production-note">Lihat Rekap tetap baca-saja. Rencanakan Produksi membuka pop-up tersendiri; daftar tetap terlihat di belakang dan hanya berubah setelah konsolidasi berhasil disimpan. Belum membuat MO Odoo.</p>
             </>
           )}
-          </>
+          {activeConsolidation && (
+            <ProductionConsolidation
+              order={activeConsolidation.order}
+              planId={activeConsolidation.planId}
+              schedules={session.schedules}
+              onBack={closeConsolidation}
+              onSaved={() => { consolidationSavedRef.current = true; }}
+            />
           )}
         </main>
       </div>

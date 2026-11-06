@@ -206,3 +206,10 @@ SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik da
 - **Migration 0004** memisahkan `ProductionPlan.delivery_schedule` dan `production_schedule`, mempertahankan jadwal kirim historis, membiarkan production_schedule pada plan lama NULL, dan menambahkan relasi snapshot order + kekurangan. ProdPlanLine.qty_mo/batch_qty NULL hingga perhitungan MO dilakukan, bukan angka rekayasa.
 - Implementasi ini menutup fitur dasar konsolidasi lokal; keputusan bisnis lain tetap terbuka, termasuk Qty Planned=0, overcapacity, rencana split, pesanan terlambat, penanganan kekurangan per toko dan persetujuan revisi.
 - Panduan terbaru: [Workspace Admin Produksi](./WORKSPACE-ADMIN-PRODUKSI.md), [Kontrak Konsolidasi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1.md).
+
+## UX modal konsolidasi tanpa kehilangan konteks (2026-11-06)
+- **DISEPAKATI:** **Rencanakan** dan **Lihat Rencana** memiliki perilaku navigasi yang sama seperti **Lihat Rekap**: native modal/pop-up di atas daftar Admin Produksi. Bukan layar halaman pengganti, bukan konten yang turun di dalam halaman, dan bukan window browser baru.
+- Daftar belakang tidak di-unmount. Paginasi, filter, posisi scroll, dan baris sumber tetap utuh. Pop-up mempunyai area scroll vertikal mandiri, tabel dapat scroll horizontal, dan footer simpan/tutup tetap terlihat.
+- ×, tombol Tutup/Batal, Esc, dan backdrop menutup modal tanpa simpan. Fokus dikembalikan ke tombol pemicu pada baris asli. Modal tidak ditutup selama request Simpan aktif.
+- Setelah simpan berhasil, rencana tersimpan ditampilkan di modal yang sama; **refresh inbox dilakukan saat modal ditutup**, dan fokus diarahkan ke **Lihat Rencana** pengganti pada baris itu (atau tab aktif bila baris keluar dari filter KIRIM).
+- Perubahan ini **frontend-only**, tanpa perubahan business rule Qty, kapasitas, status, API, skema DB maupun MO/Odoo. Pengujian React wajib memverifikasi keberadaan antrean di belakang modal dan pengembalian fokus sesudah tombol/Esc maupun setelah simpan.

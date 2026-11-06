@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import ProductionApp from "./ProductionApp";
 import {
   initializeSession, loadProductionDemand, loadProductionInbox,
+  loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
   type ProductionDemand, type ProductionInbox, type SessionInfo,
 } from "./api";
 
@@ -10,6 +11,9 @@ vi.mock("./api", () => ({
   initializeSession: vi.fn(),
   loadProductionDemand: vi.fn(),
   loadProductionInbox: vi.fn(),
+  loadConsolidationPreview: vi.fn(),
+  loadConsolidationDetail: vi.fn(),
+  saveConsolidation: vi.fn(),
   logout: vi.fn(),
 }));
 vi.mock("./App", () => ({ LoginPage: () => null }));
@@ -75,6 +79,56 @@ beforeEach(() => {
   vi.mocked(initializeSession).mockResolvedValue(session);
   vi.mocked(loadProductionInbox).mockResolvedValue(inbox);
   vi.mocked(loadProductionDemand).mockResolvedValue(recap);
+  vi.mocked(loadConsolidationPreview).mockImplementation(async (scope) => ({
+    kitchen: { code: "JP", name: "Dapur JP" },
+    delivery_date: "2026-11-07",
+    delivery_schedule: { code: "SUBUH", name: "Subuh" },
+    production_date: scope.production_date || null,
+    production_schedule: scope.production_schedule_code ? { code: "PAGI", name: "Pagi" } : null,
+    production_schedules: [
+      { code: "SUBUH", name: "Subuh" },
+      { code: "PAGI", name: "Pagi" },
+    ],
+    order_ids: [1, 2],
+    orders: [
+      { order_id: 1, store_code: "T_BAN", store_name: "Toko Bandara" },
+      { order_id: 2, store_code: "T_KD", store_name: "Toko Kedaton" },
+    ],
+    items: [{
+      product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs",
+      qty_requested: "500",
+      capacity_qty: scope.production_schedule_code ? "400" : null,
+      capacity_used: scope.production_date ? "0" : null,
+      capacity_available: scope.production_date && scope.production_schedule_code ? "400" : null,
+      sources: [
+        { order_id: 1, store_code: "T_BAN", store_name: "Toko Bandara", qty: "250" },
+        { order_id: 2, store_code: "T_KD", store_name: "Toko Kedaton", qty: "250" },
+      ],
+    }],
+  }));
+  vi.mocked(loadConsolidationDetail).mockResolvedValue({
+    plan_id: 7, status: "DRAFT",
+    kitchen: { code: "JP", name: "Dapur JP" },
+    delivery_date: "2026-11-07",
+    delivery_schedule: { code: "SUBUH", name: "Subuh" },
+    production_date: "2026-11-06",
+    production_schedule: { code: "PAGI", name: "Pagi" },
+    sources: [{
+      order_id: 1, store_code: "T_BAN", store_name: "Toko Bandara",
+      lines_snapshot: [{ product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs", qty: "250" }],
+    }],
+    items: [{
+      product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs",
+      qty_requested: "500", capacity_qty: "400", capacity_used: "0",
+      capacity_available: "400", qty_planned: "400", qty_shortfall: "100",
+      qty_mo: null,
+    }],
+    shortfall_sku_count: 1, note: "Belum membuat MO.",
+  });
+  vi.mocked(saveConsolidation).mockResolvedValue({
+    plan_id: 7, order_ids: [1, 2],
+    shortfall_sku_count: 1, detail: "Tersimpan.",
+  });
 
   // jsdom does not implement the native dialog top-layer APIs. Emulate their
   // open/close states while testing the React focus and return logic.
@@ -181,5 +235,114 @@ describe("Admin Produksi rekap modal", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(screen.getByText("Toko Kedaton")).toBeTruthy();
+  });
+});
+
+describe("Admin Produksi planning modal", () => {
+  it("keeps the inbox visible and returns focus to the exact Rencanakan button", async () => {
+    render(<ProductionApp />);
+    const buttons = await screen.findAllByRole("button", { name: "Rencanakan" });
+    const opener = buttons[0];
+    opener.focus();
+    fireEvent.click(opener);
+
+    const dialog = await screen.findByRole("dialog", { name: "Rencanakan Produksi" });
+    expect(dialog.className).toContain("production-plan-dialog");
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(screen.getByText("Antrean Pesanan Produksi")).toBeTruthy();
+    expect(screen.getByText("Toko Bandara")).toBeTruthy();
+    expect(screen.getByText("Toko Kedaton")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Semua (2)" }).className).toContain("selected");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    const closeIcon = screen.getByRole("button", {
+      name: "Tutup rencana dan kembali ke daftar pesanan",
+    });
+    await waitFor(() => expect(document.activeElement).toBe(closeIcon));
+    fireEvent.click(screen.getByRole("button", { name: "Batal / Tutup" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(screen.getAllByRole("button", { name: "Rencanakan" })).toHaveLength(2);
+    expect(loadProductionInbox).toHaveBeenCalledTimes(1);
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("closes planning with Escape without changing filters, page or inbox", async () => {
+    render(<ProductionApp />);
+    const opener = (await screen.findAllByRole("button", { name: "Rencanakan" }))[1];
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "Rencanakan Produksi" });
+    const canceled = fireEvent(dialog, new Event("cancel", {
+      bubbles: false, cancelable: true,
+    }));
+    expect(canceled).toBe(false);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(screen.getByRole("button", { name: "Semua (2)" }).className).toContain("selected");
+    expect(loadProductionInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens Lihat Rencana as a modal over the unchanged production inbox", async () => {
+    vi.mocked(loadProductionInbox).mockResolvedValue({
+      ...inbox,
+      counts: { all: 2, kirim: 1, proses_produksi: 1 },
+      items: [
+        { ...inbox.items[0], status: "PROSES_PRODUKSI", plan_id: 7 },
+        inbox.items[1],
+      ],
+    });
+    render(<ProductionApp />);
+    const opener = await screen.findByRole("button", { name: "Lihat rencana" });
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "Rencana Produksi #7" });
+    expect(dialog.className).toContain("production-plan-dialog");
+    expect(screen.getByText("Antrean Pesanan Produksi")).toBeTruthy();
+    await waitFor(() => expect(dialog.textContent).toContain("100 pcs"));
+    fireEvent.click(screen.getByRole("button", { name: "Tutup Rencana" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(loadProductionInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the inbox after save and focuses the replacement Lihat Rencana action", async () => {
+    const newInbox: ProductionInbox = {
+      ...inbox,
+      counts: { all: 2, kirim: 0, proses_produksi: 2 },
+      items: inbox.items.map((row) => ({
+        ...row, status: "PROSES_PRODUKSI" as const, plan_id: 7,
+      })),
+    };
+    vi.mocked(loadProductionInbox).mockResolvedValueOnce(inbox).mockResolvedValue(newInbox);
+
+    render(<ProductionApp />);
+    const opener = (await screen.findAllByRole("button", { name: "Rencanakan" }))[0];
+    fireEvent.click(opener);
+    await screen.findByRole("dialog", { name: "Rencanakan Produksi" });
+    fireEvent.change(screen.getByLabelText("Tanggal Produksi (manual)"), {
+      target: { value: "2026-11-06" },
+    });
+    // The production schedules arrive with the async preview. Wait before
+    // selecting PAGI, rather than firing onChange for a missing <option>.
+    await screen.findByRole("option", { name: "Pagi" });
+    fireEvent.change(screen.getByLabelText("Jadwal Produksi"), {
+      target: { value: "PAGI" },
+    });
+    await waitFor(() => expect(screen.getAllByText("400 pcs").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
+      target: { value: "400" },
+    });
+    const saveButton = screen.getByRole("button", { name: "Simpan Konsolidasi" });
+    await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(saveButton);
+    await waitFor(() => expect(saveConsolidation).toHaveBeenCalledOnce());
+    // Until the popup closes, the exact list/filter/page stays in place.
+    expect(loadProductionInbox).toHaveBeenCalledTimes(1);
+    await screen.findByRole("dialog", { name: "Rencana Produksi #7" });
+    fireEvent.click(screen.getByRole("button", { name: "Tutup Rencana" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(loadProductionInbox).toHaveBeenCalledTimes(2));
+    const historyActions = await screen.findAllByRole("button", { name: "Lihat rencana" });
+    await waitFor(() => expect(document.activeElement).toBe(historyActions[0]));
+    expect(screen.getByRole("button", { name: "Semua (2)" }).className).toContain("selected");
   });
 });

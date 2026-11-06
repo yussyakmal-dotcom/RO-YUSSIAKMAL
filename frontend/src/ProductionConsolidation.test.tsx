@@ -71,6 +71,15 @@ const detail: ConsolidationDetail = {
 };
 
 beforeEach(() => {
+  // jsdom does not implement the native <dialog> top layer.
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value: function (this: HTMLDialogElement) { this.setAttribute("open", ""); },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value: function (this: HTMLDialogElement) { this.removeAttribute("open"); },
+  });
   vi.mocked(loadConsolidationPreview).mockImplementation(async (scope) => ({
     ...preview,
     production_date: scope.production_date || null,
@@ -89,9 +98,46 @@ beforeEach(() => {
     detail: "Konsolidasi tersimpan.",
   });
 });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); document.body.style.overflow = ""; });
 
 describe("Konsolidasi Produksi V1", () => {
+  it("opens above the inbox as a native modal, focuses close, and supports Esc", async () => {
+    const onBack = vi.fn();
+    const previousOverflow = document.body.style.overflow;
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={onBack} onSaved={vi.fn()}
+    />);
+    const dialog = await screen.findByRole("dialog", { name: "Rencanakan Produksi" });
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(dialog.getAttribute("aria-describedby")).toBe("production-plan-description");
+    expect(document.body.style.overflow).toBe("hidden");
+    const close = screen.getByRole("button", {
+      name: "Tutup rencana dan kembali ke daftar pesanan",
+    });
+    await waitFor(() => expect(document.activeElement).toBe(close));
+    const canceled = fireEvent(dialog, new Event("cancel", {
+      bubbles: false, cancelable: true,
+    }));
+    expect(canceled).toBe(false);
+    expect(onBack).toHaveBeenCalledOnce();
+    // This test passes an onBack spy rather than unmounting on close.
+    expect(previousOverflow).toBe("");
+  });
+
+  it("closes when clicking the dialog backdrop, not its inner content", async () => {
+    const onBack = vi.fn();
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={onBack} onSaved={vi.fn()}
+    />);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(screen.getByText("Identitas pengiriman & produksi"));
+    expect(onBack).not.toHaveBeenCalled();
+    fireEvent.click(dialog);
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
   it("requires manual production date and schedule, shows three quantities and saves shortfall", async () => {
     const onSaved = vi.fn();
     render(<ProductionConsolidation

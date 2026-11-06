@@ -435,3 +435,48 @@ a { color: #1769af; }
   .production-plan-scope { padding: 16px; }
   .production-plan-card .order-title-bar { flex-wrap: wrap; padding: 16px; }
 }
+
+/* Plan and recap are sibling native dialogs. The inbox never navigates away. */
+.production-recap-dialog.production-plan-dialog {
+  width: min(1240px, calc(100vw - 32px));
+  max-width: 1240px;
+  max-height: 94dvh;
+}
+.production-plan-modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 270px;
+  height: min(91dvh, 990px);
+  max-height: 94dvh;
+  min-width: 0;
+}
+.production-plan-modal-header { flex-shrink: 0; }
+.production-plan-modal-header > div { min-width: 0; }
+.production-plan-modal-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.production-plan-modal-body .production-consolidation { min-width: 0; }
+.production-plan-modal-body .production-consolidation > .production-plan-scope-note {
+  margin: 16px 0;
+}
+.production-plan-modal-footer {
+  flex-shrink: 0;
+  background: #fff;
+}
+.production-plan-modal-footer .action-buttons {
+  display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end;
+}
+@media (max-width: 730px) {
+  .production-recap-dialog.production-plan-dialog {
+    width: calc(100vw - 18px); max-height: 96dvh;
+  }
+  .production-plan-modal-content { height: 95dvh; max-height: 96dvh; }
+  .production-plan-modal-body { padding: 14px 13px; }
+  .production-plan-modal-footer { flex-wrap: wrap; padding: 12px 14px; }
+  .production-plan-modal-footer > span { font-size: 11px; }
+}
