@@ -378,3 +378,24 @@ class KitchenTemplateTests(TestCase):
                 product=self.almond, schedule=self.subuh,
             ).max_qty, 350,
         )
+
+    def test_separate_capacity_admin_is_read_only_to_keep_one_edit_workflow(self):
+        self.client.force_login(self.user)
+        cap = ProductCapacity.objects.create(
+            product=self.almond, schedule=self.subuh, max_qty=300,
+        )
+        changelist = reverse("admin:ro_core_productcapacity_changelist")
+        response = self.client.get(changelist)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "300")
+        add = self.client.get(
+            reverse("admin:ro_core_productcapacity_add"),
+        )
+        self.assertIn(add.status_code, (403, 404))
+        change = self.client.post(
+            reverse("admin:ro_core_productcapacity_change", args=[cap.pk]),
+            {"product": self.almond.pk, "schedule": self.subuh.pk, "max_qty": "900"},
+        )
+        self.assertIn(change.status_code, (403, 404))
+        cap.refresh_from_db()
+        self.assertEqual(cap.max_qty, 300)
