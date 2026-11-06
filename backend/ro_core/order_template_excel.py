@@ -262,6 +262,7 @@ def preview_xlsx(kitchen, file_obj):
             continue
         row["product_id"] = product.id
         row["name"] = product.name
+        row["uom"] = product.uom.strip() or "pcs"
         capacity_changed = any(
             old_capacities.get((product.id, schedule_id)) != value
             for schedule_id, value in row["capacities"].items()
