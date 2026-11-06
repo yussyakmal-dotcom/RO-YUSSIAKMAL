@@ -4,6 +4,7 @@ from io import BytesIO
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
@@ -31,11 +32,13 @@ class UploadTemplateForm(forms.Form):
 
 @admin.register(models.ProductionAssignment)
 class ProductionAssignmentAdmin(admin.ModelAdmin):
-    """One SKU -> one kitchen, with template active flag and order."""
+    """One screen for kitchen SKU assignment and per-production-slot capacity."""
     change_list_template = "admin/ro_core/productionassignment/change_list.html"
+    # The capacity remains normalized in ProductCapacity(product, schedule).
+    # Each Product is assigned to exactly one kitchen in V1.
     list_display = (
         "product_sku", "product_name", "kitchen", "is_active",
-        "sort_order", "updated_at",
+        "capacity_summary", "sort_order", "updated_at",
     )
     list_filter = ("kitchen", "is_active")
     search_fields = ("product__sku", "product__name")
@@ -51,6 +54,92 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
     def product_name(self, obj):
         return obj.product.name
 
+    def _capacity_schedules(self):
+        return list(models.Schedule.objects.filter(active=True).order_by(
+            "sort_order", "code",
+        ))
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "product", "kitchen",
+        ).prefetch_related("product__productcapacity_set__schedule")
+
+    @admin.display(description="Kapasitas per jadwal produksi")
+    def capacity_summary(self, obj):
+        current = {
+            cap.schedule_id: cap.max_qty
+            for cap in obj.product.productcapacity_set.all()
+        }
+        chunks = []
+        for schedule in self._capacity_schedules():
+            value = current.get(schedule.pk)
+            label = schedule.production_label or schedule.name
+            if value is None:
+                chunks.append(f"{label}: belum diatur")
+            elif value != value.to_integral_value():
+                chunks.append(f"{label}: perlu koreksi Qty")
+            else:
+                chunks.append(f"{label}: {int(value):,}".replace(",", "."))
+        return " · ".join(chunks) if chunks else "Belum ada jadwal aktif"
+
+    def get_fieldsets(self, request, obj=None):
+        schedule_fields = tuple(
+            f"capacity_{schedule.pk}" for schedule in self._capacity_schedules()
+        )
+        fieldsets = [
+            (None, {"fields": ("product", "kitchen", "is_active", "sort_order")}),
+        ]
+        if schedule_fields:
+            fieldsets.append((
+                "Kapasitas Produksi — isi bersamaan dengan penugasan SKU",
+                {
+                    "fields": schedule_fields,
+                    "description": (
+                        "Isi Qty bulat maksimum per SKU dan jadwal produksi. "
+                        "Kosong = pertahankan kapasitas sebelumnya, atau tetap "
+                        "belum diatur untuk SKU baru; angka 0 berarti kapasitas nol. "
+                        "Jangan menggunakan pemisah ribuan atau desimal."
+                    ),
+                },
+            ))
+        return fieldsets
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Make dynamic fields first-class Django Admin form fields, even though
+        # their data belongs to ProductCapacity, not ProductionAssignment.
+        kwargs["fields"] = ("product", "kitchen", "is_active", "sort_order")
+        base = super().get_form(request, obj, **kwargs)
+        schedules = self._capacity_schedules()
+        dynamic = {
+            f"capacity_{schedule.pk}": forms.IntegerField(
+                label=f"Kapasitas {schedule.production_label or schedule.name}",
+                min_value=0, max_value=99999999999999, required=False,
+                help_text="Qty bulat untuk jadwal produksi; kosong tidak menghapus kapasitas lama.",
+            )
+            for schedule in schedules
+        }
+
+        def __init__(form, *args, **inner_kwargs):
+            base.__init__(form, *args, **inner_kwargs)
+            if form.instance.pk:
+                existing = {
+                    cap.schedule_id: cap.max_qty
+                    for cap in models.ProductCapacity.objects.filter(
+                        product_id=form.instance.product_id,
+                        schedule_id__in=[schedule.pk for schedule in schedules],
+                    )
+                }
+                for schedule in schedules:
+                    value = existing.get(schedule.pk)
+                    if value is not None and value == value.to_integral_value():
+                        form.fields[f"capacity_{schedule.pk}"].initial = int(value)
+
+        return type(
+            "AssignmentWithCapacityForm", (base,), {
+                **dynamic, "__init__": __init__,
+            },
+        )
+
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "kitchen":
             kwargs["queryset"] = models.Warehouse.objects.filter(
@@ -62,25 +151,69 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         # Turn off items via is_active; preserve mapping/history instead of deleting.
         return False
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
         previous = None
         if change:
-            old = models.ProductionAssignment.objects.get(pk=obj.pk)
+            old = models.ProductionAssignment.objects.select_for_update().get(
+                pk=obj.pk,
+            )
             previous = {
                 "kitchen": old.kitchen_id, "active": old.is_active,
                 "sort_order": old.sort_order,
             }
+
+        schedules = self._capacity_schedules()
+        # Only fields explicitly filled are changed. An empty cell does NOT
+        # overwrite a previously defined capacity with 0 or NULL.
+        updates = {
+            schedule.pk: form.cleaned_data[f"capacity_{schedule.pk}"]
+            for schedule in schedules
+            if form.cleaned_data.get(f"capacity_{schedule.pk}") is not None
+        }
+        if updates:
+            models.Product.objects.select_for_update().get(pk=obj.product_id)
+        old_capacities = {
+            cap.schedule_id: cap.max_qty
+            for cap in models.ProductCapacity.objects.select_for_update().filter(
+                product_id=obj.product_id,
+                schedule_id__in=updates,
+            )
+        }
         super().save_model(request, obj, form, change)
+
+        capacity_changes = []
+        for schedule in schedules:
+            if schedule.pk not in updates:
+                continue
+            value = updates[schedule.pk]
+            old_value = old_capacities.get(schedule.pk)
+            if old_value is not None and old_value == value:
+                continue
+            models.ProductCapacity.objects.update_or_create(
+                product_id=obj.product_id, schedule_id=schedule.pk,
+                defaults={"max_qty": value},
+            )
+            capacity_changes.append({
+                "jadwal": schedule.code,
+                "before": int(old_value) if old_value is not None and
+                    old_value == old_value.to_integral_value() else None,
+                "after": value,
+            })
+
         new_state = {
             "kitchen": obj.kitchen_id, "active": obj.is_active,
             "sort_order": obj.sort_order,
         }
-        if previous != new_state:
+        if previous != new_state or capacity_changes:
             models.AuditLog.objects.create(
                 actor=request.user, entity="KitchenOrderTemplate",
                 entity_id=str(obj.product_id),
                 action="ADMIN_EDIT",
-                changes={"before": previous, "after": new_state},
+                changes={
+                    "before": previous, "after": new_state,
+                    "capacity_changes": capacity_changes,
+                },
             )
 
     def get_urls(self):
