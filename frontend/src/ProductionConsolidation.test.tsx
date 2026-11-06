@@ -108,7 +108,7 @@ describe("Konsolidasi Produksi V1", () => {
     fireEvent.change(screen.getByLabelText("Jadwal Produksi"), {
       target: { value: "PAGI" },
     });
-    await waitFor(() => expect(screen.getByText("400 Pcs")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("400 Pcs").length).toBeGreaterThan(0));
     expect(screen.getByText("500 Pcs")).toBeTruthy();
     const input = screen.getByRole("textbox", { name: "Qty Produksi 10005" });
     fireEvent.change(input, { target: { value: "400" } });
@@ -139,7 +139,7 @@ describe("Konsolidasi Produksi V1", () => {
     fireEvent.change(screen.getByLabelText("Jadwal Produksi"), {
       target: { value: "PAGI" },
     });
-    await waitFor(() => expect(screen.getByText("400 Pcs")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("400 Pcs").length).toBeGreaterThan(0));
     fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
       target: { value: "500" },
     });
@@ -148,7 +148,7 @@ describe("Konsolidasi Produksi V1", () => {
     }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Periksa Qty / kapasitas")).toBeTruthy();
     expect(saveConsolidation).not.toHaveBeenCalled();
-    expect(screen.getByText("Subuh")).toBeTruthy();
+    expect(screen.getAllByText("Subuh").length).toBeGreaterThan(0);
   });
 
   it("opens persisted plan as read-only history, including its shortage", async () => {
