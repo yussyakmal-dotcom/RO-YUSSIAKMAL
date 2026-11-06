@@ -72,6 +72,13 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.AddField(
+            model_name="productionplanline", name="capacity_used_before",
+            field=models.DecimalField(
+                max_digits=18, decimal_places=4, default=Decimal("0"),
+                validators=[MinValueValidator(Decimal("0"))],
+            ),
+        ),
+        migrations.AddField(
             model_name="productionplanline", name="qty_shortfall",
             field=models.DecimalField(
                 max_digits=18, decimal_places=4, default=Decimal("0"),
