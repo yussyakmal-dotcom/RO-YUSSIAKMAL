@@ -341,3 +341,39 @@ class KitchenTemplateTests(TestCase):
             self.assertFalse(ProductionAssignment.objects.exists())
             self.assertFalse(ProductCapacity.objects.exists())
 
+
+    def test_kitchen_move_with_existing_capacity_requires_explicit_confirmation(self):
+        assignment = ProductionAssignment.objects.create(
+            product=self.almond, kitchen=self.pastry, is_active=True,
+        )
+        ProductCapacity.objects.create(
+            product=self.almond, schedule=self.subuh, max_qty=350,
+        )
+        self.client.force_login(self.user)
+        change_url = reverse(
+            "admin:ro_core_productionassignment_change", args=[assignment.pk],
+        )
+        payload = {
+            "product": self.almond.pk,
+            "kitchen": self.roti.pk,
+            "sort_order": 0,
+            "is_active": "on",
+            "capacity_%s" % self.subuh.pk: "350",
+            "_save": "Save",
+        }
+        refused = self.client.post(change_url, payload)
+        self.assertEqual(refused.status_code, 200)
+        self.assertContains(refused, "centang konfirmasi")
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.kitchen, self.pastry)
+        approved = self.client.post(
+            change_url, {**payload, "confirm_capacity_move": "on"},
+        )
+        self.assertEqual(approved.status_code, 302, approved.content[:200])
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.kitchen, self.roti)
+        self.assertEqual(
+            ProductCapacity.objects.get(
+                product=self.almond, schedule=self.subuh,
+            ).max_qty, 350,
+        )
