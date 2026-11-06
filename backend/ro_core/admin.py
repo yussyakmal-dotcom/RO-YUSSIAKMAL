@@ -16,6 +16,19 @@ from . import models
 from .order_template_excel import apply_xlsx, preview_xlsx
 
 
+class StrictWholeCapacityField(forms.IntegerField):
+    """Do not accept text '1.0000' as 1: production quantities are whole numbers."""
+
+    def to_python(self, value):
+        if value in self.empty_values:
+            return None
+        if isinstance(value, bool) or not str(value).strip().isdigit():
+            raise forms.ValidationError(
+                "Kapasitas wajib angka bulat tanpa titik, koma atau desimal."
+            )
+        return super().to_python(value)
+
+
 class UploadTemplateForm(forms.Form):
     kitchen = forms.ModelChoiceField(
         label="Dapur untuk template",
@@ -79,7 +92,7 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
             elif value != value.to_integral_value():
                 chunks.append(f"{label}: perlu koreksi Qty")
             else:
-                chunks.append(f"{label}: {int(value):,}".replace(",", "."))
+                chunks.append(f"{label}: {int(value):,}".replace(",", ".") + f" {obj.product.uom or 'pcs'}")
         return " · ".join(chunks) if chunks else "Belum ada jadwal aktif"
 
     def get_fieldsets(self, request, obj=None):
@@ -111,7 +124,7 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         base = super().get_form(request, obj, **kwargs)
         schedules = self._capacity_schedules()
         dynamic = {
-            f"capacity_{schedule.pk}": forms.IntegerField(
+            f"capacity_{schedule.pk}": StrictWholeCapacityField(
                 label=f"Kapasitas {schedule.production_label or schedule.name}",
                 min_value=0, max_value=99999999999999, required=False,
                 help_text="Qty bulat untuk jadwal produksi; kosong tidak menghapus kapasitas lama.",
