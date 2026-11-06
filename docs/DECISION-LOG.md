@@ -255,3 +255,11 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-057 (✅ refresh & UX):** Saat simpan berhasil, histori rencana tetap terlihat pada modal; antrean baru dimuat ulang **setelah penutupan modal** dan fokus diarahkan ke **Lihat Rencana** pengganti atau filter aktif jika baris terhapus oleh filter. Penutupan diblokir selama request simpan.
 - **I-058 (✅ tests):** Tes React mencakup native dialog/ESC/backdrop, scroll lock, daftar tetap terlihat, fokus kembali tanpa reload, modal histori dan fokus ke tombol setelah simpan.
 - **Batas:** Perubahan hanya frontend + docs. Tidak menyentuh model, migrasi, API produksi, transaksi, Qty/UoM, master kapasitas, atau Odoo.
+
+
+## Integrasi template dapur dan kapasitas produksi (2026-11-06)
+- **D-067 (✅ koreksi pengguna):** Konfigurasi kapasitas merupakan bagian dari pekerjaan memasukkan SKU ke dapur. Admin harus dapat mengisi **SKU + dapur + kapasitas per jadwal produksi** sekaligus, bukan mengelola dua menu yang terpisah.
+- **I-059 (✅ implementasi Django Admin):** ProductionAssignmentAdmin menampilkan kapasitas per jadwal aktif + UoM produk, dan mempunyai input integer kapasitas di form penugasan. Status belum diatur berbeda dari nol. Simpan assignment/kapasitas dan AuditLog atomik. Pindah dapur dengan kapasitas lama memerlukan konfirmasi.
+- **I-060 (✅ implementasi impor Excel):** Kolom `KAPASITAS_<KODE_JADWAL>` otomatis hadir pada download, parsing validasi Qty integer dan aktifnya jadwal, preview baca-saja, serta apply atomik/idempotent dan audit perubahan kapasitas. Kosong mempertahankan nilai lama; `0` eksplisit.
+- **D-068 (✅ struktur tetap normal):** Model `ProductCapacity(product, schedule, max_qty)` tetap terpisah secara relasional dari `ProductionAssignment(product OneToOne, kitchen)`, sebab kapasitas memiliki banyak jadwal dan tiap SKU saat ini hanya ditugaskan ke satu dapur. Yang disatukan adalah alur UI/input + transaksi. **Tanpa migrasi DB atau write Odoo.**
+- **O-027 (❓ ke depan):** Jika SKU dapat diproduksi oleh lebih dari satu dapur, model kapasitas perlu diubah menjadi unik per dapur × SKU × jadwal produksi. Ketika SKU pindah dapur pada V1, kapasitas melekat SKU dan harus dikonfirmasi telah diperiksa.
