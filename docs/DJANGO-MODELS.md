@@ -90,3 +90,7 @@ Jangan membangun generic workflow, approval flow, full event sourcing, inventory
 
 ## Template order manual — V1
 `ProductionAssignment` sekaligus sumber daftar SKU untuk formulir per dapur. File Excel diunggah melalui Django Admin; impor hanya memperbarui penugasan dan status template lokal, tidak menulis ke Odoo. Formulir toko mengambil daftar melalui `GET /api/v1/order-templates/<kode_dapur>/` (read-only dan perlu login). Qty selalu milik `StoreOrderLine`, bukan `ProductionAssignment`. Lihat [panduan template](./TEMPLATE-PEMESANAN.md) dan migration `0002_order_template_flags.py`.
+
+
+## Pengelolaan kapasitas dari form ProductionAssignment (2026-11-06)
+`ProductionAssignment(product OneToOne, kitchen)` menyatakan satu SKU ditugaskan ke satu dapur. `ProductCapacity(product, schedule, max_qty)` menyatakan kapasitas untuk setiap jadwal produksi, jadi tetap satu tabel relasional terpisah; namun **diisi dari form Admin/Excel template penugasan SKU yang sama**. Kolom Excel `KAPASITAS_<KODE_JADWAL>`; nilai Qty integer, kosong mempertahankan nilai sebelumnya/belum diatur. Simpan assignment, kapasitas dan audit atomik. Tidak perlu migrasi. Jika multi-dapur per SKU nantinya diperlukan, key kapasitas harus mencakup dapur.
