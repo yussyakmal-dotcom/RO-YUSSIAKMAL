@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    ProductionAssignment, Schedule, StoreOrder, StoreOrderLine, Warehouse,
+    ProductionAssignment, ProductionPlanSource, Schedule, StoreOrder, StoreOrderLine, Warehouse,
 )
 
 
@@ -336,7 +336,11 @@ def production_inbox(request):
         [start:start + page_size]
     )
 
-    inbox_summaries = _order_qty_summaries([order.pk for order in orders])
+    order_ids = [order.pk for order in orders]
+    inbox_summaries = _order_qty_summaries(order_ids)
+    plan_by_order = dict(ProductionPlanSource.objects.filter(
+        order_id__in=order_ids
+    ).values_list("order_id", "plan_id"))
     return Response({
         "status_filter": selected,
         "page": page,
@@ -352,6 +356,7 @@ def production_inbox(request):
             {
                 "order_id": order.pk,
                 "status": order.status,
+                "plan_id": plan_by_order.get(order.pk),
                 "store_code": order.store.code,
                 "store_name": order.store.name,
                 "kitchen_code": order.kitchen.code,
