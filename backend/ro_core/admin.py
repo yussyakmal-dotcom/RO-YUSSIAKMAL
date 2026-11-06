@@ -502,12 +502,45 @@ class StoreOrderLineAdmin(admin.ModelAdmin):
 # Other models remain in technical Django Admin, not the operational frontend.
 for model in (
     models.Warehouse, models.UserWarehouseAccess, models.Product,
-    models.Schedule, models.ProductCapacity, models.MinStockRule,
+    models.Schedule, models.MinStockRule,
     models.MaterialRequestLine,
     models.PackingAllocation, models.DocumentCounter, models.OdooDocument,
     models.AuditLog,
 ):
     admin.site.register(model)
+
+
+@admin.register(models.ProductCapacity)
+class ProductCapacityAdmin(admin.ModelAdmin):
+    """Inspect master capacities here; edit in SKU-to-kitchen template only."""
+
+    list_display = ("product", "schedule", "capacity_display", "kitchen_display")
+    search_fields = ("product__sku", "product__name")
+    list_filter = ("schedule",)
+    list_select_related = ("product", "schedule")
+    readonly_fields = ("product", "schedule", "max_qty")
+
+    @admin.display(description="Kapasitas (UoM)")
+    def capacity_display(self, obj):
+        if obj.max_qty != obj.max_qty.to_integral_value():
+            return "Perlu koreksi Qty"
+        return f"{int(obj.max_qty):,}".replace(",", ".") + f" {obj.product.uom or 'pcs'}"
+
+    @admin.display(description="Dapur penugasan")
+    def kitchen_display(self, obj):
+        assignment = models.ProductionAssignment.objects.filter(
+            product_id=obj.product_id,
+        ).select_related("kitchen").first()
+        return assignment.kitchen.name if assignment else "Belum ditugaskan"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class ReadOnlyProductionModelAdmin(admin.ModelAdmin):
