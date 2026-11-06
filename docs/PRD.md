@@ -213,3 +213,10 @@ SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik da
 - ×, tombol Tutup/Batal, Esc, dan backdrop menutup modal tanpa simpan. Fokus dikembalikan ke tombol pemicu pada baris asli. Modal tidak ditutup selama request Simpan aktif.
 - Setelah simpan berhasil, rencana tersimpan ditampilkan di modal yang sama; **refresh inbox dilakukan saat modal ditutup**, dan fokus diarahkan ke **Lihat Rencana** pengganti pada baris itu (atau tab aktif bila baris keluar dari filter KIRIM).
 - Perubahan ini **frontend-only**, tanpa perubahan business rule Qty, kapasitas, status, API, skema DB maupun MO/Odoo. Pengujian React wajib memverifikasi keberadaan antrean di belakang modal dan pengembalian fokus sesudah tombol/Esc maupun setelah simpan.
+
+
+## Produk ke dapur dan kapasitas produksi dalam satu proses administrasi (2026-11-06)
+- **Disepakati:** Admin mengisi/mengubah SKU di template dapur sekaligus mengisi **kapasitas produksi SKU per jadwal** pada form yang sama. Tidak perlu membuka menu kapasitas terpisah untuk setiap produk.
+- Download/Upload Excel template dapur menyertakan kolom `KAPASITAS_<KODE_JADWAL>` dari jadwal produksi aktif; satu preview, validasi (integer, nonnegatif, tidak ada rumus/kolom jadwal tidak aktif), impor atomik + audit.
+- Kapasitas `0` berarti tidak ada kapasitas; sel kosong mempertahankan kapasitas lama atau belum diatur untuk SKU baru. Konsolidasi tidak boleh memperlakukan kosong sebagai tidak terbatas. UoM kapasitas mengikuti master produk Odoo; Qty harus bulat.
+- Model `ProductionAssignment` tetap satu dapur per SKU; kapasitas tetap `ProductCapacity(product,schedule,max_qty)` agar multi-jadwal tetap normalisasi, meskipun form dan impor digabung. Perpindahan SKU dengan kapasitas lama ke dapur baru memerlukan konfirmasi.

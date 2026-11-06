@@ -12,7 +12,7 @@ from django.db import transaction
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from .models import AuditLog, Product, ProductionAssignment, Warehouse
+from .models import AuditLog, Product, ProductCapacity, ProductionAssignment, Schedule, Warehouse
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
@@ -27,6 +27,7 @@ class TemplatePreview:
     new_count: int
     update_count: int
     unchanged_count: int
+    schedule_columns: list
 
     @property
     def is_valid(self):
@@ -80,6 +81,38 @@ def _sort_order(value, default):
     return result
 
 
+MAX_CAPACITY = 99999999999999  # DecimalField(18,4), displayed as integer.
+
+
+def _capacity_qty(value):
+    """Whole Qty only, no decimal/ribuan ambiguity or Excel formulas."""
+    if value is None or str(value).strip() == "":
+        return None  # Empty = preserve master value; NOT zero.
+    if isinstance(value, bool):
+        raise ValueError("Kapasitas wajib bilangan bulat, bukan TRUE/FALSE")
+    if isinstance(value, int):
+        result = value
+    elif isinstance(value, float) and value.is_integer():
+        result = int(value)
+    elif isinstance(value, str) and value.strip().isdigit():
+        result = int(value.strip())
+    else:
+        raise ValueError("Kapasitas wajib angka bulat tanpa titik/koma/desimal")
+    if result < 0 or result > MAX_CAPACITY:
+        raise ValueError("Kapasitas di luar batas 0 sampai 99999999999999")
+    return result
+
+
+def _display_capacity(value):
+    if value is None:
+        return "Belum diatur"
+    if isinstance(value, int):
+        return str(value)
+    if value != value.to_integral_value():
+        return "Perlu koreksi Qty"
+    return str(int(value))
+
+
 def preview_xlsx(kitchen, file_obj):
     """Return validation results without any database writes."""
     if kitchen.kind not in ("KITCHEN", "PACKING") or not kitchen.active:
@@ -93,6 +126,11 @@ def preview_xlsx(kitchen, file_obj):
     if len(content) > MAX_UPLOAD_BYTES:
         raise ValueError("File Excel terlalu besar (maksimum 5 MB).")
 
+    schedules = list(Schedule.objects.filter(active=True).order_by(
+        "sort_order", "code",
+    ))
+    allowed_schedules = {schedule.code.upper(): schedule for schedule in schedules}
+
     try:
         workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
         worksheet = workbook.active
@@ -102,12 +140,28 @@ def preview_xlsx(kitchen, file_obj):
         if not header:
             raise ValueError("File Excel kosong.")
         indices = {}
+        capacity_headers = {}
         for idx, cell in enumerate(header):
             title = str(cell.value or "").strip().upper()
             if title in {"SKU", "INTERNAL REFERENCE"}:
+                if "SKU" in indices:
+                    raise ValueError("Kolom SKU tidak boleh berulang.")
                 indices["SKU"] = idx
             elif title in {"AKTIF", "URUTAN", "NAMA"}:
+                if title in indices:
+                    raise ValueError(f"Kolom {title} tidak boleh berulang.")
                 indices[title] = idx
+            elif title.startswith("KAPASITAS_"):
+                code = title.removeprefix("KAPASITAS_")
+                if code not in allowed_schedules:
+                    raise ValueError(
+                        f"Kolom {title} bukan jadwal produksi aktif. "
+                        "Unduh format terbaru."
+                    )
+                schedule = allowed_schedules[code]
+                if schedule.pk in capacity_headers:
+                    raise ValueError(f"Kolom {title} tidak boleh berulang.")
+                capacity_headers[schedule.pk] = idx
         if "SKU" not in indices:
             raise ValueError("Kolom SKU wajib ada di baris pertama.")
         extracted, errors, seen = [], [], set()
@@ -131,12 +185,26 @@ def preview_xlsx(kitchen, file_obj):
                     raise ValueError("Rumus Excel tidak diizinkan")
                 active = _active(active_cell.value if active_cell else None)
                 order = _sort_order(order_cell.value if order_cell else None, excel_row_num - 2)
+                capacities = {}
+                for schedule in schedules:
+                    idx = capacity_headers.get(schedule.pk)
+                    if idx is None or idx >= len(cells):
+                        continue
+                    cell = cells[idx]
+                    if cell.data_type == "f":
+                        raise ValueError(
+                            f"Kapasitas {schedule.code} tidak boleh rumus Excel"
+                        )
+                    value = _capacity_qty(cell.value)
+                    if value is not None:
+                        capacities[schedule.pk] = value
                 if sku in seen:
                     raise ValueError(f"SKU {sku} duplikat dalam Excel")
                 seen.add(sku)
                 extracted.append({
                     "row_number": excel_row_num, "sku": sku,
                     "is_active": active, "sort_order": order,
+                    "capacities": capacities,
                 })
             except ValueError as exc:
                 errors.append(f"Baris {excel_row_num}: {exc}")
@@ -145,6 +213,10 @@ def preview_xlsx(kitchen, file_obj):
         if isinstance(exc, ValueError) and (
             str(exc).startswith("File Excel") or str(exc).startswith("Kolom SKU")
             or str(exc).startswith("Maksimal")
+            or str(exc).startswith("Kolom KAPASITAS")
+            or str(exc).startswith("Kolom AKTIF")
+            or str(exc).startswith("Kolom URUTAN")
+            or str(exc).startswith("Kolom NAMA")
         ):
             raise
         if isinstance(exc, (OSError, InvalidFileException, BadZipFile)):
@@ -159,6 +231,13 @@ def preview_xlsx(kitchen, file_obj):
     existing = {
         record.product_id: record
         for record in ProductionAssignment.objects.filter(product_id__in=ids)
+    }
+    old_capacities = {
+        (cap.product_id, cap.schedule_id): cap.max_qty
+        for cap in ProductCapacity.objects.filter(
+            product_id__in=ids,
+            schedule_id__in=[schedule.pk for schedule in schedules],
+        )
     }
 
     new_count = update_count = unchanged_count = 0
@@ -183,10 +262,26 @@ def preview_xlsx(kitchen, file_obj):
             continue
         row["product_id"] = product.id
         row["name"] = product.name
+        row["uom"] = product.uom.strip() or "pcs"
+        capacity_changed = any(
+            old_capacities.get((product.id, schedule_id)) != value
+            for schedule_id, value in row["capacities"].items()
+        )
+        row["capacity_cells"] = [
+            _display_capacity(
+                row["capacities"].get(
+                    schedule.pk, old_capacities.get((product.id, schedule.pk)),
+                )
+            )
+            for schedule in schedules
+        ]
         if current is None:
             row["action"] = "BARU"
             new_count += 1
-        elif current.is_active != row["is_active"] or current.sort_order != row["sort_order"]:
+        elif (
+            current.is_active != row["is_active"] or
+            current.sort_order != row["sort_order"] or capacity_changed
+        ):
             row["action"] = "UBAH"
             update_count += 1
         else:
@@ -202,6 +297,7 @@ def preview_xlsx(kitchen, file_obj):
         new_count=new_count,
         update_count=update_count,
         unchanged_count=unchanged_count,
+        schedule_columns=schedules,
     )
 
 
@@ -235,17 +331,55 @@ def apply_xlsx(preview, actor=None):
             )
             if assignment.kitchen_id != kitchen.id:
                 raise ValueError("SKU sudah menjadi milik dapur lain.")
+            template_changed = (
+                not was_created and
+                (assignment.is_active != row["is_active"] or
+                 assignment.sort_order != row["sort_order"])
+            )
+            before = {
+                "active": assignment.is_active, "order": assignment.sort_order,
+            } if template_changed else None
+            if template_changed:
+                assignment.is_active = row["is_active"]
+                assignment.sort_order = row["sort_order"]
+                assignment.save(update_fields=["is_active", "sort_order", "updated_at"])
+
+            capacity_changes = []
+            for schedule_id, qty in sorted(row["capacities"].items()):
+                previous_capacity = ProductCapacity.objects.select_for_update().filter(
+                    product_id=product.pk, schedule_id=schedule_id,
+                ).first()
+                old_qty = (
+                    previous_capacity.max_qty if previous_capacity else None
+                )
+                if old_qty is not None and old_qty == qty:
+                    continue
+                ProductCapacity.objects.update_or_create(
+                    product=product, schedule_id=schedule_id,
+                    defaults={"max_qty": qty},
+                )
+                schedule = Schedule.objects.get(pk=schedule_id)
+                capacity_changes.append({
+                    "schedule": schedule.code,
+                    "before": int(old_qty) if old_qty is not None and
+                        old_qty == old_qty.to_integral_value() else None,
+                    "after": qty,
+                })
+
             if was_created:
                 created += 1
-                changes.append({"sku": product.sku, "operation": "CREATE"})
-            elif assignment.is_active != row["is_active"] or assignment.sort_order != row["sort_order"]:
-                before = {"active": assignment.is_active, "order": assignment.sort_order}
-                assignment.is_active, assignment.sort_order = row["is_active"], row["sort_order"]
-                assignment.save(update_fields=["is_active", "sort_order", "updated_at"])
+            elif template_changed or capacity_changes:
                 updated += 1
+            if was_created or template_changed or capacity_changes:
                 changes.append({
-                    "sku": product.sku, "operation": "UPDATE", "before": before,
-                    "after": {"active": row["is_active"], "order": row["sort_order"]},
+                    "sku": product.sku,
+                    "operation": "CREATE" if was_created else "UPDATE",
+                    "before": before,
+                    "after": {
+                        "active": row["is_active"],
+                        "order": row["sort_order"],
+                    },
+                    "capacity_changes": capacity_changes,
                 })
         if changes:
             AuditLog.objects.create(

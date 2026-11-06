@@ -163,3 +163,10 @@ Panduan: [Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md), [Kontrak](docs/KONT
 - Tekan ×, tombol **Batal / Tutup** (atau **Tutup Rencana**), **Esc**, atau area backdrop untuk kembali ke daftar. Fokus kembali ke tombol pemicu; filter, pagination, dan posisi daftar tetap terjaga. Membuka/menutup tanpa simpan tidak memanggil ulang inbox.
 - Setelah konsolidasi berhasil tersimpan, histori tetap tampil di modal. Inbox diperbarui **ketika modal ditutup**, lalu fokus diarahkan ke tombol pengganti **Lihat Rencana** pada baris yang sama, atau tab filter bila baris keluar dari filter aktif.
 - Modal tidak dapat ditutup saat request Simpan Konsolidasi sedang berlangsung, agar tidak menimbulkan kesan salah bahwa penyimpanan dibatalkan. Tidak mengubah aturan backend, migrasi, Qty/UoM, atau MO/Odoo.
+
+
+## Template SKU dapur + kapasitas dalam satu alur
+Di **Django Admin → Production Assignments**, Admin dapat mengisi **SKU, dapur, status aktif, urutan, dan kapasitas produksi per jadwal** sekaligus dalam satu form. Excel template dapur juga mempunyai kolom `KAPASITAS_<KODE_JADWAL>`, misalnya `KAPASITAS_SUBUH` dan `KAPASITAS_PAGI`, sehingga penugasan SKU + kapasitas disimpan atomik.
+Kapasitas harus angka bulat sesuai UoM master Odoo. Kolom kosong mempertahankan nilai lama (atau belum diatur untuk SKU baru); `0` adalah kapasitas nol. Kapasitas tidak diatur tetap memblokir konsolidasi pada jadwal itu. Edit/impor diaudit, dan pindah dapur untuk SKU berkapasitas memerlukan konfirmasi. Data tetap disimpan normal di `ProductCapacity(product, schedule)` karena satu SKU hanya ditugaskan ke satu dapur pada V1. Tanpa migrasi baru. Panduan: [Template SKU per Dapur](docs/TEMPLATE-PEMESANAN.md).
+
+Menu teknis **Product Capacities** masih dapat dipakai untuk inspeksi, tetapi **read-only**; input/perubahan kapasitas harus dilakukan melalui template SKU dapur agar audit dan validasi integer konsisten.

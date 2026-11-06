@@ -3,7 +3,8 @@ from io import BytesIO
 
 from django import forms
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
@@ -13,6 +14,19 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from . import models
 from .order_template_excel import apply_xlsx, preview_xlsx
+
+
+class StrictWholeCapacityField(forms.IntegerField):
+    """Do not accept text '1.0000' as 1: production quantities are whole numbers."""
+
+    def to_python(self, value):
+        if value in self.empty_values:
+            return None
+        if isinstance(value, bool) or not str(value).strip().isdigit():
+            raise ValidationError(
+                "Kapasitas wajib angka bulat tanpa titik, koma atau desimal."
+            )
+        return super().to_python(value)
 
 
 class UploadTemplateForm(forms.Form):
@@ -31,11 +45,13 @@ class UploadTemplateForm(forms.Form):
 
 @admin.register(models.ProductionAssignment)
 class ProductionAssignmentAdmin(admin.ModelAdmin):
-    """One SKU -> one kitchen, with template active flag and order."""
+    """One screen for kitchen SKU assignment and per-production-slot capacity."""
     change_list_template = "admin/ro_core/productionassignment/change_list.html"
+    # The capacity remains normalized in ProductCapacity(product, schedule).
+    # Each Product is assigned to exactly one kitchen in V1.
     list_display = (
         "product_sku", "product_name", "kitchen", "is_active",
-        "sort_order", "updated_at",
+        "capacity_summary", "sort_order", "updated_at",
     )
     list_filter = ("kitchen", "is_active")
     search_fields = ("product__sku", "product__name")
@@ -51,6 +67,131 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
     def product_name(self, obj):
         return obj.product.name
 
+    def _capacity_schedules(self):
+        return list(models.Schedule.objects.filter(active=True).order_by(
+            "sort_order", "code",
+        ))
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "product", "kitchen",
+        ).prefetch_related("product__productcapacity_set__schedule")
+
+    @admin.display(description="Kapasitas per jadwal produksi")
+    def capacity_summary(self, obj):
+        current = {
+            cap.schedule_id: cap.max_qty
+            for cap in obj.product.productcapacity_set.all()
+        }
+        chunks = []
+        for schedule in self._capacity_schedules():
+            value = current.get(schedule.pk)
+            label = schedule.production_label or schedule.name
+            if value is None:
+                chunks.append(f"{label}: belum diatur")
+            elif value != value.to_integral_value():
+                chunks.append(f"{label}: perlu koreksi Qty")
+            else:
+                chunks.append(f"{label}: {int(value):,}".replace(",", ".") + f" {obj.product.uom or 'pcs'}")
+        return " · ".join(chunks) if chunks else "Belum ada jadwal aktif"
+
+    def get_fieldsets(self, request, obj=None):
+        schedule_fields = tuple(
+            f"capacity_{schedule.pk}" for schedule in self._capacity_schedules()
+        )
+        fieldsets = [
+            (None, {"fields": ("product", "kitchen", "is_active", "sort_order")}),
+        ]
+        if schedule_fields:
+            fieldsets.append((
+                "Kapasitas Produksi — isi bersamaan dengan penugasan SKU",
+                {
+                    "fields": schedule_fields,
+                    "description": (
+                        "Isi Qty bulat maksimum per SKU dan jadwal produksi. "
+                        "Kosong = pertahankan kapasitas sebelumnya, atau tetap "
+                        "belum diatur untuk SKU baru; angka 0 berarti kapasitas nol. "
+                        "Jangan menggunakan pemisah ribuan atau desimal."
+                    ),
+                },
+            ))
+        if obj and models.ProductCapacity.objects.filter(
+            product_id=obj.product_id,
+        ).exists():
+            fieldsets.append((
+                "Pengamanan saat memindahkan SKU ke dapur lain",
+                {
+                    "fields": ("confirm_capacity_move",),
+                    "description": (
+                        "Kapasitas saat ini melekat ke SKU, bukan ke histori dapur. "
+                        "Jika mengubah dapur, verifikasi kapasitas di dapur tujuan "
+                        "dan centang konfirmasi ini. Tidak diperlukan bila tidak pindah."
+                    ),
+                },
+            ))
+        return fieldsets
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Make dynamic fields first-class Django Admin form fields, even though
+        # their data belongs to ProductCapacity, not ProductionAssignment.
+        kwargs["fields"] = ("product", "kitchen", "is_active", "sort_order")
+        base = super().get_form(request, obj, **kwargs)
+        schedules = self._capacity_schedules()
+        dynamic = {
+            f"capacity_{schedule.pk}": StrictWholeCapacityField(
+                label=f"Kapasitas {schedule.production_label or schedule.name}",
+                min_value=0, max_value=99999999999999, required=False,
+                help_text="Qty bulat untuk jadwal produksi; kosong tidak menghapus kapasitas lama.",
+            )
+            for schedule in schedules
+        }
+        dynamic["confirm_capacity_move"] = forms.BooleanField(
+            required=False,
+            label="Saya sudah memeriksa kapasitas untuk dapur baru",
+            help_text=(
+                "Wajib hanya jika mengganti dapur untuk SKU yang sudah "
+                "memiliki kapasitas. Kapasitas lama tetap melekat pada SKU."
+            ),
+        )
+
+        def clean(form):
+            cleaned = base.clean(form)
+            new_kitchen = cleaned.get("kitchen")
+            if (
+                form.instance.pk and new_kitchen is not None and
+                form.instance.kitchen_id != new_kitchen.pk and
+                models.ProductCapacity.objects.filter(
+                    product_id=form.instance.product_id
+                ).exists() and not cleaned.get("confirm_capacity_move")
+            ):
+                raise forms.ValidationError(
+                    "SKU ini sudah memiliki kapasitas produksi. "
+                    "Jika memindahkan ke dapur lain, periksa kembali "
+                    "seluruh kapasitas jadwal dan centang konfirmasi."
+                )
+            return cleaned
+
+        def __init__(form, *args, **inner_kwargs):
+            base.__init__(form, *args, **inner_kwargs)
+            if form.instance.pk:
+                existing = {
+                    cap.schedule_id: cap.max_qty
+                    for cap in models.ProductCapacity.objects.filter(
+                        product_id=form.instance.product_id,
+                        schedule_id__in=[schedule.pk for schedule in schedules],
+                    )
+                }
+                for schedule in schedules:
+                    value = existing.get(schedule.pk)
+                    if value is not None and value == value.to_integral_value():
+                        form.fields[f"capacity_{schedule.pk}"].initial = int(value)
+
+        return type(
+            "AssignmentWithCapacityForm", (base,), {
+                **dynamic, "__init__": __init__, "clean": clean,
+            },
+        )
+
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "kitchen":
             kwargs["queryset"] = models.Warehouse.objects.filter(
@@ -62,25 +203,69 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         # Turn off items via is_active; preserve mapping/history instead of deleting.
         return False
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
         previous = None
         if change:
-            old = models.ProductionAssignment.objects.get(pk=obj.pk)
+            old = models.ProductionAssignment.objects.select_for_update().get(
+                pk=obj.pk,
+            )
             previous = {
                 "kitchen": old.kitchen_id, "active": old.is_active,
                 "sort_order": old.sort_order,
             }
+
+        schedules = self._capacity_schedules()
+        # Only fields explicitly filled are changed. An empty cell does NOT
+        # overwrite a previously defined capacity with 0 or NULL.
+        updates = {
+            schedule.pk: form.cleaned_data[f"capacity_{schedule.pk}"]
+            for schedule in schedules
+            if form.cleaned_data.get(f"capacity_{schedule.pk}") is not None
+        }
+        if updates:
+            models.Product.objects.select_for_update().get(pk=obj.product_id)
+        old_capacities = {
+            cap.schedule_id: cap.max_qty
+            for cap in models.ProductCapacity.objects.select_for_update().filter(
+                product_id=obj.product_id,
+                schedule_id__in=updates,
+            )
+        }
         super().save_model(request, obj, form, change)
+
+        capacity_changes = []
+        for schedule in schedules:
+            if schedule.pk not in updates:
+                continue
+            value = updates[schedule.pk]
+            old_value = old_capacities.get(schedule.pk)
+            if old_value is not None and old_value == value:
+                continue
+            models.ProductCapacity.objects.update_or_create(
+                product_id=obj.product_id, schedule_id=schedule.pk,
+                defaults={"max_qty": value},
+            )
+            capacity_changes.append({
+                "jadwal": schedule.code,
+                "before": int(old_value) if old_value is not None and
+                    old_value == old_value.to_integral_value() else None,
+                "after": value,
+            })
+
         new_state = {
             "kitchen": obj.kitchen_id, "active": obj.is_active,
             "sort_order": obj.sort_order,
         }
-        if previous != new_state:
+        if previous != new_state or capacity_changes:
             models.AuditLog.objects.create(
                 actor=request.user, entity="KitchenOrderTemplate",
                 entity_id=str(obj.product_id),
                 action="ADMIN_EDIT",
-                changes={"before": previous, "after": new_state},
+                changes={
+                    "before": previous, "after": new_state,
+                    "capacity_changes": capacity_changes,
+                },
             )
 
     def get_urls(self):
@@ -121,7 +306,7 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
                         result = apply_xlsx(preview, actor=request.user)
                         messages.success(
                             request,
-                            "Template tersimpan: %s SKU baru, %s diperbarui, %s tetap."
+                            "Template dan kapasitas tersimpan: %s SKU baru, %s diperbarui, %s tetap."
                             % (result["created"], result["updated"], result["unchanged"]),
                         )
                         return redirect(
@@ -148,15 +333,21 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         wb = Workbook()
         sheet = wb.active
         sheet.title = "SKU Template"
-        sheet.append(["SKU", "NAMA", "AKTIF", "URUTAN"])
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = "A1:D1"
+        schedules = self._capacity_schedules()
+        sheet.append(
+            ["SKU", "NAMA", "AKTIF", "URUTAN"] +
+            [f"KAPASITAS_{schedule.code}" for schedule in schedules]
+        )
+        sheet.freeze_panes = "E2"
+        sheet.auto_filter.ref = f"A1:{sheet.cell(1, 4 + len(schedules)).column_letter}1"
         for cell in sheet[1]:
             cell.font = Font(name="Calibri", bold=True, color="FFFFFF")
             cell.fill = PatternFill(fill_type="solid", fgColor="1768AC")
             cell.alignment = Alignment(horizontal="center")
         for col, width in {"A": 25, "B": 48, "C": 20, "D": 15}.items():
             sheet.column_dimensions[col].width = width
+        for col in sheet[1][4:]:
+            sheet.column_dimensions[col.column_letter].width = 23
         dropdown = DataValidation(
             type="list", formula1='"Aktif,Nonaktif"', allow_blank=True,
         )
@@ -171,6 +362,9 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
             ["NAMA", "Opsional untuk pengecekan; tidak digunakan untuk mengubah master Odoo."],
             ["AKTIF", "Aktif / Nonaktif. Jika kosong, dianggap Aktif."],
             ["URUTAN", "Bilangan 0 atau lebih; jika kosong memakai urutan baris Excel."],
+            ["KAPASITAS_*", "Satu kolom per jadwal produksi aktif, contoh KAPASITAS_SUBUH. Isi angka Qty bulat tanpa titik/koma. Kosong mempertahankan kapasitas lama atau belum diatur untuk SKU baru; 0 berarti kapasitas nol."],
+            ["PENTING", "Kapasitas SKU diatur di sini bersamaan dengan pemilihan dapur, bukan di Qty pesanan toko."],
+            ["PENTING", "Untuk konsolidasi produksi, kapasitas jadwal yang belum diatur akan memblokir penyimpanan rencana."],
             ["PENTING", "Baris SKU yang tidak tercantum TIDAK dihapus atau dinonaktifkan."],
             ["PENTING", "Untuk menonaktifkan SKU, masukkan SKU tersebut dan pilih Nonaktif."],
             ["PENTING", "Qty pesanan tidak diisi di Excel; Qty diisi Admin Toko saat memesan."],
@@ -181,6 +375,11 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         note.column_dimensions["B"].width = 105
         note["A1"].font = Font(bold=True)
         note["B1"].font = Font(bold=True)
+        for schedule in schedules:
+            note.append([
+                f"KAPASITAS_{schedule.code}",
+                f"Kapasitas produksi untuk {schedule.production_label or schedule.name}. Qty integer dalam UoM asli SKU dari master Odoo.",
+            ])
         stream = BytesIO()
         wb.save(stream)
         response = HttpResponse(
@@ -303,12 +502,45 @@ class StoreOrderLineAdmin(admin.ModelAdmin):
 # Other models remain in technical Django Admin, not the operational frontend.
 for model in (
     models.Warehouse, models.UserWarehouseAccess, models.Product,
-    models.Schedule, models.ProductCapacity, models.MinStockRule,
+    models.Schedule, models.MinStockRule,
     models.MaterialRequestLine,
     models.PackingAllocation, models.DocumentCounter, models.OdooDocument,
     models.AuditLog,
 ):
     admin.site.register(model)
+
+
+@admin.register(models.ProductCapacity)
+class ProductCapacityAdmin(admin.ModelAdmin):
+    """Inspect master capacities here; edit in SKU-to-kitchen template only."""
+
+    list_display = ("product", "schedule", "capacity_display", "kitchen_display")
+    search_fields = ("product__sku", "product__name")
+    list_filter = ("schedule",)
+    list_select_related = ("product", "schedule")
+    readonly_fields = ("product", "schedule", "max_qty")
+
+    @admin.display(description="Kapasitas (UoM)")
+    def capacity_display(self, obj):
+        if obj.max_qty != obj.max_qty.to_integral_value():
+            return "Perlu koreksi Qty"
+        return f"{int(obj.max_qty):,}".replace(",", ".") + f" {obj.product.uom or 'pcs'}"
+
+    @admin.display(description="Dapur penugasan")
+    def kitchen_display(self, obj):
+        assignment = models.ProductionAssignment.objects.filter(
+            product_id=obj.product_id,
+        ).select_related("kitchen").first()
+        return assignment.kitchen.name if assignment else "Belum ditugaskan"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class ReadOnlyProductionModelAdmin(admin.ModelAdmin):
