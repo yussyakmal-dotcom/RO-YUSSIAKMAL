@@ -3,7 +3,7 @@ from io import BytesIO
 
 from django import forms
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -23,7 +23,7 @@ class StrictWholeCapacityField(forms.IntegerField):
         if value in self.empty_values:
             return None
         if isinstance(value, bool) or not str(value).strip().isdigit():
-            raise forms.ValidationError(
+            raise ValidationError(
                 "Kapasitas wajib angka bulat tanpa titik, koma atau desimal."
             )
         return super().to_python(value)
