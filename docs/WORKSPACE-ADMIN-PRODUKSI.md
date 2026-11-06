@@ -91,7 +91,7 @@ Buka `http://localhost:900/produksi/` lalu cek Order #1 dan #2. Tidak ada peruba
 - UoM per baris pesanan belum tersedia: `StoreOrderLine` sekarang punya satu Qty per SKU dan unitnya mengikuti master Produk. Multi-UoM untuk **satu SKU** dengan baris `1 Kg` dan `500 gram` memerlukan keputusan dan perubahan skema lanjutan. Ini **belum** diimplementasikan. Jangan menyimpulkan adanya konversi otomatis.
 - Perubahan ini hanya pemeriksaan dan penyajian API/React, tanpa migrasi atau mutasi data/Odoo. `qty_total=null` menandakan total tidak aman untuk dinyatakan sebagai satu angka; baca `qty_by_uom` dan `qty_invalid`.
 
-## Kontrak bisnis konsolidasi berikutnya (belum diimplementasikan)
+## Kontrak bisnis konsolidasi V1 (tersedia) dan fitur tahap berikutnya
 
 Keputusan sudah pasti: **tanggal produksi dipilih manual oleh Admin Produksi**, bukan default H-1/H-2. Untuk pesanan `JP / SUBUH / kirim 2026-11-07`, operator harus mengisi tanggal produksi sebelum menyimpan.
 
