@@ -1,8 +1,9 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 {% block content %}
-<p>Pilih dapur, lalu upload file <strong>.xlsx</strong> dengan kolom <code>SKU</code>, <code>NAMA</code> (opsional), <code>AKTIF</code>, dan <code>URUTAN</code>.</p>
-<p><strong>Preview</strong> hanya membaca. <strong>Impor</strong> hanya menyimpan SKU yang tercantum dalam file; SKU lain tidak akan dihapus atau dinonaktifkan.</p>
+<p>Pilih dapur, lalu upload file <strong>.xlsx</strong> dengan kolom <code>SKU</code>, <code>NAMA</code> (opsional), <code>AKTIF</code>, <code>URUTAN</code>, dan <code>KAPASITAS_&lt;JADWAL&gt;</code> (misalnya <code>KAPASITAS_SUBUH</code>, sesuai jadwal produksi aktif).</p>
+<p><strong>Preview</strong> hanya membaca. <strong>Impor</strong> menyimpan penugasan SKU dan kapasitas produksi per jadwal dalam satu transaksi; SKU lain tidak akan dihapus atau dinonaktifkan.</p>
+<p><strong>Kapasitas wajib bilangan bulat</strong> tanpa titik/koma. Kolom/sel kosong mempertahankan kapasitas lama, atau berarti <em>Belum diatur</em> untuk produk baru; <strong>0</strong> berarti kapasitas nol. Kapasitas yang belum diatur tetap memblokir konsolidasi pada jadwal tersebut.</p>
 <p><a href="{% url 'admin:ro_core_productionassignment_download_template' %}">Unduh format Excel</a> | <a href="{% url 'admin:ro_core_productionassignment_changelist' %}">Kembali ke daftar template</a></p>
 <form method="post" enctype="multipart/form-data">
   {% csrf_token %}
@@ -22,10 +23,10 @@
     <p>Validasi lulus. Jika ingin mengimpor, pilih kembali file Excel yang sama kemudian tekan <strong>Impor ke Middleware</strong>.</p>
   {% endif %}
   <table>
-    <thead><tr><th>Baris</th><th>SKU</th><th>Nama dari Odoo</th><th>Status Template</th><th>Urutan</th><th>Tindakan</th></tr></thead>
+    <thead><tr><th>Baris</th><th>SKU</th><th>Nama dari Odoo</th><th>Status Template</th><th>Urutan</th>{% for schedule in preview.schedule_columns %}<th>Kapasitas {{ schedule.production_label|default:schedule.name }}</th>{% endfor %}<th>Tindakan</th></tr></thead>
     <tbody>
       {% for row in preview.rows|slice:":100" %}
-      <tr><td>{{ row.row_number }}</td><td>{{ row.sku }}</td><td>{{ row.name|default:"(tidak ditemukan)" }}</td><td>{% if row.is_active %}Aktif{% else %}Nonaktif{% endif %}</td><td>{{ row.sort_order }}</td><td>{{ row.action|default:"PERIKSA" }}</td></tr>
+      <tr><td>{{ row.row_number }}</td><td>{{ row.sku }}</td><td>{{ row.name|default:"(tidak ditemukan)" }}</td><td>{% if row.is_active %}Aktif{% else %}Nonaktif{% endif %}</td><td>{{ row.sort_order }}</td>{% for value in row.capacity_cells %}<td>{{ value }}</td>{% endfor %}<td>{{ row.action|default:"PERIKSA" }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
