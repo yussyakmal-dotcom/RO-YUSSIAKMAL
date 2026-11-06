@@ -106,6 +106,8 @@ def _capacity_qty(value):
 def _display_capacity(value):
     if value is None:
         return "Belum diatur"
+    if isinstance(value, int):
+        return str(value)
     if value != value.to_integral_value():
         return "Perlu koreksi Qty"
     return str(int(value))
