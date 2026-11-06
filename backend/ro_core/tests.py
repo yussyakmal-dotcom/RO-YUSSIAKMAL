@@ -47,7 +47,8 @@ class ConstraintsTest(TestCase):
             kitchen=self.kitchen,
             production_date=date(2026, 11, 2),
             delivery_date=date(2026, 11, 3),
-            schedule=self.schedule,
+            delivery_schedule=self.schedule,
+            production_schedule=self.schedule,
         )
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
