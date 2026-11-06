@@ -115,6 +115,20 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
                     ),
                 },
             ))
+        if obj and models.ProductCapacity.objects.filter(
+            product_id=obj.product_id,
+        ).exists():
+            fieldsets.append((
+                "Pengamanan saat memindahkan SKU ke dapur lain",
+                {
+                    "fields": ("confirm_capacity_move",),
+                    "description": (
+                        "Kapasitas saat ini melekat ke SKU, bukan ke histori dapur. "
+                        "Jika mengubah dapur, verifikasi kapasitas di dapur tujuan "
+                        "dan centang konfirmasi ini. Tidak diperlukan bila tidak pindah."
+                    ),
+                },
+            ))
         return fieldsets
 
     def get_form(self, request, obj=None, **kwargs):
@@ -131,6 +145,31 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
             )
             for schedule in schedules
         }
+        dynamic["confirm_capacity_move"] = forms.BooleanField(
+            required=False,
+            label="Saya sudah memeriksa kapasitas untuk dapur baru",
+            help_text=(
+                "Wajib hanya jika mengganti dapur untuk SKU yang sudah "
+                "memiliki kapasitas. Kapasitas lama tetap melekat pada SKU."
+            ),
+        )
+
+        def clean(form):
+            cleaned = base.clean(form)
+            new_kitchen = cleaned.get("kitchen")
+            if (
+                form.instance.pk and new_kitchen is not None and
+                form.instance.kitchen_id != new_kitchen.pk and
+                models.ProductCapacity.objects.filter(
+                    product_id=form.instance.product_id
+                ).exists() and not cleaned.get("confirm_capacity_move")
+            ):
+                raise forms.ValidationError(
+                    "SKU ini sudah memiliki kapasitas produksi. "
+                    "Jika memindahkan ke dapur lain, periksa kembali "
+                    "seluruh kapasitas jadwal dan centang konfirmasi."
+                )
+            return cleaned
 
         def __init__(form, *args, **inner_kwargs):
             base.__init__(form, *args, **inner_kwargs)
@@ -149,7 +188,7 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
 
         return type(
             "AssignmentWithCapacityForm", (base,), {
-                **dynamic, "__init__": __init__,
+                **dynamic, "__init__": __init__, "clean": clean,
             },
         )
 
