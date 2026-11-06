@@ -89,3 +89,5 @@ Contoh **ilustratif**, bukan hasil pembacaan kapasitas nyata di server.
 - Skema **tetap normal**: `ProductionAssignment(product OneToOne, kitchen)` adalah pemilik SKU di dapur V1 dan `ProductCapacity(product,schedule,max_qty)` menyimpan beberapa kapasitas per jadwal. **Yang disatukan adalah form/Excel dan transaksi**, bukan menggabungkan model ke satu kolom.
 - Jika kelak satu SKU boleh ditugaskan ke beberapa dapur, diperlukan model `dapur × SKU × jadwal produksi`. Saat ini satu SKU hanya memiliki satu dapur.
 - **Tidak ada migrasi baru**, tidak ada penulisan Odoo, dan tidak ada perubahan Qty pesanan toko.
+
+**Menu teknis Product Capacities** kini hanya untuk **melihat** kapasitas tersimpan; tambah/ubah kapasitas dilakukan dari **Production Assignments** atau upload Excel template dapur, sehingga tidak ada dua alur edit yang berpotensi berbeda.
