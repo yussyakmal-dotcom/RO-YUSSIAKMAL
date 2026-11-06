@@ -247,6 +247,7 @@ class ProductionPlanLine(models.Model):
         validators=[MinValueValidator(POSITIVE)],
     )
     capacity_qty = qty_field()
+    capacity_used_before = qty_field()
     qty_shortfall = qty_field()
     bom_snapshot = models.JSONField(default=dict, blank=True)
 
