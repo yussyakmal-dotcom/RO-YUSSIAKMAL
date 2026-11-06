@@ -219,7 +219,9 @@ class KitchenTemplateTests(TestCase):
                 product=self.almond, schedule=self.pagi,
             ).max_qty, 400,
         )
-        self.assertEqual(apply_xlsx(preview, actor=self.user)["unchanged"], 2)
+        updated_preview = preview_xlsx(self.pastry, xlsx(data))
+        self.assertEqual(updated_preview.unchanged_count, 2)
+        self.assertEqual(apply_xlsx(updated_preview, actor=self.user)["unchanged"], 2)
         self.assertEqual(ProductCapacity.objects.count(), 4)
         self.assertEqual(AuditLog.objects.filter(action="XLSX_IMPORT").count(), 1)
 
