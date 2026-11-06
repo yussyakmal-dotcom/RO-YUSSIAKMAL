@@ -389,3 +389,49 @@ a { color: #1769af; }
 
 /* Never let an invalid historical fractional quantity look like a valid order. */
 .production-inbox-table td small.production-qty-warning { color: #a63232; font-weight: 800; }
+
+/* Production consolidation: independent full-size working screen. */
+.production-inbox-actions { min-width: 152px; }
+.production-inbox-actions button { display: block; margin: 3px 0; white-space: nowrap; }
+.production-inbox-actions .production-plan-trigger { color: #0e7846; font-weight: 700; }
+.production-plan-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin: 14px 0 20px; }
+.production-plan-header h1 { margin: 6px 0; color: #1c3450; font-size: clamp(22px, 2.8vw, 30px); }
+.production-plan-header p { margin: 7px 0 0; color: #72879b; font-size: 12px; line-height: 1.6; }
+.production-consolidation .card { margin-bottom: 18px; }
+.production-plan-scope { padding: 22px; }
+.production-plan-fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.production-plan-fields > div { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.production-plan-fields > div > span,
+.production-plan-fields label { color: #66839b; font-size: 11px; font-weight: 600; }
+.production-plan-fields > div > strong { color: #234760; font-size: 13px; overflow-wrap: anywhere; }
+.production-plan-fields select, .production-plan-fields input {
+  width: 100%; min-height: 39px; font: inherit; font-size: 13px; padding: 7px 9px;
+  border: 1px solid #bfcedd; border-radius: 7px; background: white; color: #223a54;
+}
+.production-plan-scope-note { margin: 15px 0 0; color: #677e91; font-size: 12px; line-height: 1.65; }
+.production-plan-card { padding: 0; overflow: hidden; }
+.production-plan-card .order-title-bar { padding: 20px 21px; }
+.production-plan-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.production-plan-table thead { background: #f2f7fb; }
+.production-plan-table th { text-align: left; padding: 12px 11px; color: #526a82; white-space: nowrap; font-size: 11px; font-weight: 700; border-bottom: 1px solid #dbe6ef; }
+.production-plan-table td { padding: 12px 11px; border-bottom: 1px solid #e9eff5; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.production-plan-table td:first-child { min-width: 170px; }
+.production-plan-table td strong { color: #24475f; }
+.production-plan-table td small { display: block; color: #8193a4; font-size: 11px; margin-top: 3px; }
+.production-plan-table .production-plan-alert, .production-plan-alert { color: #a04d18; font-weight: 800; }
+.production-plan-alert { background: #fff4e8; border-radius: 6px; padding: 5px 8px; font-size: 11px; }
+.production-qty-input { width: 115px; padding: 8px 9px; border-radius: 6px; font-size: 13px; color: #18364d; border: 1px solid #b5c8d8; }
+.production-qty-input[aria-invalid="true"] { border-color: #b34c32; background: #fff8f4; }
+.production-qty-input:focus-visible { outline: 3px solid #9bcfff; outline-offset: 1px; }
+.production-plan-card > .production-plan-scope-note { padding: 0 21px 20px; }
+.production-plan-actions { display: flex; justify-content: flex-end; gap: 12px; margin: 20px 0; }
+@media (max-width: 1000px) {
+  .production-plan-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .production-plan-table { min-width: 950px; }
+}
+@media (max-width: 620px) {
+  .production-plan-header { flex-direction: column; }
+  .production-plan-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .production-plan-scope { padding: 16px; }
+  .production-plan-card .order-title-bar { flex-wrap: wrap; padding: 16px; }
+}
