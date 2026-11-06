@@ -274,11 +274,10 @@ class KitchenTemplateTests(TestCase):
                 apply_xlsx(preview)
             self.assertFalse(ProductionAssignment.objects.exists())
             self.assertFalse(ProductCapacity.objects.exists())
-        unknown = preview_xlsx(self.pastry, xlsx([
-            ["SKU", "KAPASITAS_MALAM"], ["12300", 100],
-        ]))
-        self.assertFalse(unknown.is_valid)
-        self.assertIn("bukan jadwal produksi aktif", str(unknown.errors))
+        with self.assertRaisesMessage(ValueError, "bukan jadwal produksi aktif"):
+            preview_xlsx(self.pastry, xlsx([
+                ["SKU", "KAPASITAS_MALAM"], ["12300", 100],
+            ]))
         self.assertFalse(ProductCapacity.objects.exists())
 
     def test_admin_single_assignment_form_edits_slot_capacity_and_preserves_blank(self):
