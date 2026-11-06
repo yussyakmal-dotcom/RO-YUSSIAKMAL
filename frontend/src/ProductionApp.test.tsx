@@ -321,6 +321,9 @@ describe("Admin Produksi planning modal", () => {
     fireEvent.change(screen.getByLabelText("Tanggal Produksi (manual)"), {
       target: { value: "2026-11-06" },
     });
+    // The production schedules arrive with the async preview. Wait before
+    // selecting PAGI, rather than firing onChange for a missing <option>.
+    await screen.findByRole("option", { name: "Pagi" });
     fireEvent.change(screen.getByLabelText("Jadwal Produksi"), {
       target: { value: "PAGI" },
     });
