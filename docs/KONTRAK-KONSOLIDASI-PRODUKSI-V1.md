@@ -84,13 +84,13 @@ Setiap baris SKU dalam workspace perencanaan **wajib** memperlihatkan **secara b
 - Qty historis yang benar-benar pecahan atau tidak valid **memblokir simpan**; tidak ada pembulatan tersembunyi.
 - Multi-UoM untuk **SKU yang sama** belum didukung skema `StoreOrderLine` saat ini; implementasi perlu aturan konversi terverifikasi dan relasi UoM per baris sebelum diperbolehkan.
 
-## 6. Alur UI yang ditargetkan (belum tersedia)
+## 6. Alur UI Konsolidasi V1 (sudah tersedia)
 
 1. Admin Produksi melihat seluruh pesanan KIRIM / PROSES PRODUKSI dalam antrean global. Tombol **Lihat Rekap** tetap membuka modal baca-saja, lalu kembali fokus ke antrean.
 2. Tindakan terpisah **Rencanakan/Konsolidasi Produksi** membuka workspace yang menampilkan **tanggal kirim + jadwal kirim** secara read-only dan field **tanggal produksi + jadwal produksi** secara eksplisit.
 3. Tabel SKU memuat **Qty Pesan | Qty Kapasitas Produksi | Qty Produksi**, beserta UoM, kapasitas terpakai/tersisa bila relevan, dan peringatan selisih.
 4. **Pratinjau** tetap read-only terhadap database; perubahan Qty Produksi dalam formulir lokal belum mengubah order, status atau Odoo.
-5. **Simpan Konsolidasi** (fitur berikutnya) harus mengizinkan Qty Produksi di bawah Qty Pesan ketika kapasitas tidak cukup, **menyimpan Qty Pesan/Produksi/Kapasitas dan kekurangannya**, serta mempertahankan jadwal kirim toko. Ketentuan lain yang belum diputuskan tetap divalidasi secara konservatif.
+5. **Simpan Konsolidasi** tersedia dan mengizinkan Qty Produksi di bawah Qty Pesan ketika kapasitas tidak cukup. Rencana menyimpan Qty Pesan/Produksi/Kapasitas dan kekurangan; jadwal kirim toko tetap utuh. Aturan yang belum diputuskan dijaga oleh batas konservatif V1 (lihat bagian implementasi).
 
 ## 7. Transaksi, anti-duplikasi dan audit
 
