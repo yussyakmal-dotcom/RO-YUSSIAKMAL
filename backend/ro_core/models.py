@@ -217,6 +217,7 @@ class ProductionPlan(models.Model):
             # while using different production schedules.
             models.UniqueConstraint(
                 fields=["kitchen", "delivery_date", "delivery_schedule"],
+                condition=Q(production_schedule__isnull=False),
                 name="uq_ro_plan_delivery_scope",
             )
         ]
