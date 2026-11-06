@@ -304,9 +304,45 @@ class StoreOrderLineAdmin(admin.ModelAdmin):
 for model in (
     models.Warehouse, models.UserWarehouseAccess, models.Product,
     models.Schedule, models.ProductCapacity, models.MinStockRule,
-    models.ProductionPlan,
-    models.ProductionPlanLine, models.MaterialRequestLine,
+    models.MaterialRequestLine,
     models.PackingAllocation, models.DocumentCounter, models.OdooDocument,
     models.AuditLog,
 ):
     admin.site.register(model)
+
+
+class ReadOnlyProductionModelAdmin(admin.ModelAdmin):
+    """Plan/source truth is changed only by audited production API transactions."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(models.ProductionPlan)
+class ProductionPlanAdmin(ReadOnlyProductionModelAdmin):
+    list_display = (
+        "id", "kitchen", "delivery_date", "delivery_schedule",
+        "production_date", "production_schedule", "status",
+    )
+    list_filter = ("kitchen", "delivery_date", "production_date", "status")
+
+
+@admin.register(models.ProductionPlanLine)
+class ProductionPlanLineAdmin(ReadOnlyProductionModelAdmin):
+    list_display = (
+        "id", "plan", "product", "qty_requested", "qty_planned",
+        "capacity_qty", "capacity_used_before", "qty_shortfall",
+    )
+    list_select_related = ("plan", "product")
+
+
+@admin.register(models.ProductionPlanSource)
+class ProductionPlanSourceAdmin(ReadOnlyProductionModelAdmin):
+    list_display = ("id", "plan", "order")
+    list_select_related = ("plan", "order")
