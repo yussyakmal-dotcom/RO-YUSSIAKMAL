@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
   type ConsolidationDetail, type ConsolidationPreview,
@@ -33,7 +33,7 @@ function isValidPlan(item: ConsolidationItem, input: string): boolean {
     n <= BigInt(item.capacity_available);
 }
 
-/** Full-size workspace, separate from the read-only Lihat Rekap popup. */
+/** Native modal: keep the inbox mounted, keyboard focus inside, and scroll in the popup. */
 export default function ProductionConsolidation({
   order, planId, schedules, onBack, onSaved,
 }: Props) {
@@ -46,6 +46,26 @@ export default function ProductionConsolidation({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (!dialog.open) dialog.showModal();
+    closeRef.current?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  // A submitted plan must not be interrupted by closing the popup.
+  const closeModal = () => {
+    if (!saving) onBack();
+  };
 
   useEffect(() => {
     if (!savedPlanId) {
@@ -152,17 +172,38 @@ export default function ProductionConsolidation({
     }).length;
 
   return (
-    <div className="production-consolidation">
-      <div className="breadcrumb">Workspace <span>/</span> Admin Produksi <span>/</span> {viewing ? "Rencana Tersimpan" : "Konsolidasi"}</div>
-      <div className="production-plan-header">
-        <div>
-          <div className="eyebrow">ADMIN PRODUKSI · {viewing ? "RIWAYAT RENCANA" : "KONSOLIDASI BARU"}</div>
-          <h1 tabIndex={-1}>{viewing ? `Rencana Produksi #${savedPlanId}` : "Rencanakan Produksi"}</h1>
-          <p>Qty pesan toko tetap terkunci. Kekurangan produksi boleh dicatat tanpa memindahkan jadwal kirim.</p>
-        </div>
-        <button type="button" className="btn btn-secondary" onClick={onBack}>Kembali ke Antrean</button>
-      </div>
-
+    <dialog
+      ref={dialogRef}
+      className="production-recap-dialog production-plan-dialog"
+      aria-labelledby="production-plan-title"
+      aria-describedby="production-plan-description"
+      onCancel={(event) => { event.preventDefault(); closeModal(); }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) closeModal();
+      }}
+    >
+      <div className="production-plan-modal-content">
+        <header className="production-recap-header production-plan-modal-header">
+          <div>
+            <div className="eyebrow">ADMIN PRODUKSI · {viewing ? "RIWAYAT RENCANA" : "KONSOLIDASI BARU"}</div>
+            <h2 id="production-plan-title">{viewing ? `Rencana Produksi #${savedPlanId}` : "Rencanakan Produksi"}</h2>
+            <p id="production-plan-description">
+              {order.kitchen_name} · Tanggal kirim {order.delivery_date} · Jadwal kirim {order.schedule_name}
+            </p>
+            <p>Qty pesan toko tetap terkunci. Kekurangan produksi boleh dicatat tanpa memindahkan jadwal kirim.</p>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            className="production-recap-close"
+            disabled={saving}
+            aria-label="Tutup rencana dan kembali ke daftar pesanan"
+            title="Tutup rencana"
+            onClick={closeModal}
+          >×</button>
+        </header>
+        <div className="production-plan-modal-body">
+          <div className="production-consolidation">
       <section className="card production-plan-scope">
         <div className="section-heading">Identitas pengiriman & produksi</div>
         <div className="production-plan-fields">
@@ -282,18 +323,26 @@ export default function ProductionConsolidation({
           )}
         </section>
       )}
-      {!viewing && (
-        <div className="production-plan-actions">
-          <button type="button" className="btn btn-secondary" onClick={onBack}>Batal / Kembali</button>
-          <button type="button" className="btn btn-primary" disabled={!canSave} onClick={submit}>
-            {saving ? "Menyimpan…" : "Simpan Konsolidasi"}
-          </button>
-        </div>
-      )}
       {viewing && <p className="production-plan-scope-note">
         Rencana tersimpan secara lokal. Status pesanan sumber sudah PROSES_PRODUKSI.
         Kekurangan tetap tercatat; belum membuat Manufacturing Order Odoo.
       </p>}
-    </div>
+          </div>
+        </div>
+        <footer className="production-recap-footer production-plan-modal-footer">
+          <span>Tekan Esc untuk menutup dan kembali ke daftar pesanan.</span>
+          <div className="action-buttons">
+            <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeModal}>
+              {viewing ? "Tutup Rencana" : "Batal / Tutup"}
+            </button>
+            {!viewing && (
+              <button type="button" className="btn btn-primary" disabled={!canSave} onClick={submit}>
+                {saving ? "Menyimpan…" : "Simpan Konsolidasi"}
+              </button>
+            )}
+          </div>
+        </footer>
+      </div>
+    </dialog>
   );
 }
