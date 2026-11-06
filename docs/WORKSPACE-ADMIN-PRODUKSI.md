@@ -159,3 +159,9 @@ docker compose exec api python manage.py check
 - Bila **Simpan Konsolidasi** berhasil, modal berubah menjadi histori **Rencana Produksi #ID** tanpa membuang konteks antrean. Setelah modal ditutup, daftar dimuat ulang dan fokus diarahkan ke **Lihat Rencana** pada baris asal; jika baris hilang karena filter status, fokus ke tab filter aktif.
 - Saat penyimpanan sedang berjalan, tombol tutup dan tindakan Esc/backdrop tidak menutup dialog agar status penyimpanan tidak ambigu.
 - Seluruh perhitungan Qty, kapasitas, kekurangan, status dan histori **tidak berubah** karena perubahan UX modal ini. Tidak ada migrasi baru.
+
+
+## Mengisi kapasitas saat memasukkan SKU ke dapur
+Batas kapasitas di perencanaan Admin Produksi berasal dari master `ProductCapacity.max_qty` per SKU × jadwal produksi. Admin sekarang mengatur kapasitas **langsung dari Django Admin → Production Assignments**, bersamaan dengan menugaskan SKU ke dapur. Template Excel yang sama juga menyediakan `KAPASITAS_SUBUH`, `KAPASITAS_PAGI`, dst. sesuai jadwal aktif; impor penugasan+kapasitas atomik.
+Qty kapasitas harus bilangan bulat dalam UoM asli dari Odoo. Kosong tetap **Belum diatur** (dan menahan proses simpan konsolidasi), bukan nol atau tanpa batas. Kapasitas 0 adalah nol. Tidak ada migrasi skema pada perubahan alur input ini.
+Panduan: [Template SKU per Dapur](./TEMPLATE-PEMESANAN.md).
