@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ProductionRecapModal from "./ProductionRecapModal";
+import ProductionConsolidation from "./ProductionConsolidation";
 import { productionQtyLabel } from "./productionQty";
 import { LoginPage } from "./App";
 import {
@@ -23,6 +24,10 @@ function ProductionApp() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const recapOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const [activeConsolidation, setActiveConsolidation] = useState<{
+    order: ProductionInboxOrder; planId: number | null;
+  } | null>(null);
+  const consolidationOpenerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +103,22 @@ function ProductionApp() {
     });
   };
 
+  const openConsolidation = (
+    order: ProductionInboxOrder, planId: number | null,
+    opener: HTMLButtonElement,
+  ) => {
+    consolidationOpenerRef.current = opener;
+    setActiveConsolidation({ order, planId });
+  };
+
+  const closeConsolidation = () => {
+    const opener = consolidationOpenerRef.current;
+    setActiveConsolidation(null);
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+    });
+  };
+
   const chooseFilter = (value: ProductionInboxFilter) => {
     if (value === filter) return;
     setFilter(value);
@@ -155,6 +176,16 @@ function ProductionApp() {
           <div className="sidebar-bottom">RO Middleware · V1</div>
         </aside>
         <main className="workspace">
+          {activeConsolidation ? (
+            <ProductionConsolidation
+              order={activeConsolidation.order}
+              planId={activeConsolidation.planId}
+              schedules={session.schedules}
+              onBack={closeConsolidation}
+              onSaved={() => setRefresh((value) => value + 1)}
+            />
+          ) : (
+          <>
           <div className="breadcrumb">Workspace <span>/</span> Admin Produksi <span>/</span> Antrean Pesanan</div>
           <div className="page-heading">
             <div>
@@ -201,7 +232,21 @@ function ProductionApp() {
                               <td>{order.schedule_name}</td>
                               <td><strong>{order.sku_count} SKU</strong><small className={order.qty_invalid ? "production-qty-warning" : undefined}>{productionQtyLabel(order.qty_total, order.qty_uom, order.qty_by_uom, order.qty_invalid)}</small></td>
                               <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
-                              <td><button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button></td>
+                              <td className="production-inbox-actions">
+                                <button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button>
+                                {order.status === "KIRIM" && (
+                                  <button type="button" className="production-open-rekap production-plan-trigger"
+                                    onClick={(event) => openConsolidation(order, null, event.currentTarget)}>
+                                    Rencanakan
+                                  </button>
+                                )}
+                                {order.status === "PROSES_PRODUKSI" && order.plan_id != null && (
+                                  <button type="button" className="production-open-rekap production-plan-trigger"
+                                    onClick={(event) => openConsolidation(order, order.plan_id, event.currentTarget)}>
+                                    Lihat rencana
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                           ))}
                           {!inbox.items.length && <tr><td colSpan={7} className="production-inbox-empty">Belum ada pesanan untuk status ini.</td></tr>}
@@ -227,8 +272,10 @@ function ProductionApp() {
                   onClose={closeRecap}
                 />
               )}
-              <p className="production-note">Status Proses Produksi hanya akan diberikan ketika langkah konsolidasi rencana benar-benar disimpan. Membuka rincian tidak mengubah status atau membuat MO.</p>
+              <p className="production-note">Lihat Rekap tetap baca-saja. Rencanakan Produksi membuat rencana lokal, mencatat kekurangan, dan mengubah status pesanan setelah tersimpan atomik; belum membuat MO Odoo.</p>
             </>
+          )}
+          </>
           )}
         </main>
       </div>
