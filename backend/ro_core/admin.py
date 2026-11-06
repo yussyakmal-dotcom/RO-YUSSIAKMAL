@@ -254,7 +254,7 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
                         result = apply_xlsx(preview, actor=request.user)
                         messages.success(
                             request,
-                            "Template tersimpan: %s SKU baru, %s diperbarui, %s tetap."
+                            "Template dan kapasitas tersimpan: %s SKU baru, %s diperbarui, %s tetap."
                             % (result["created"], result["updated"], result["unchanged"]),
                         )
                         return redirect(
@@ -281,15 +281,21 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         wb = Workbook()
         sheet = wb.active
         sheet.title = "SKU Template"
-        sheet.append(["SKU", "NAMA", "AKTIF", "URUTAN"])
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = "A1:D1"
+        schedules = self._capacity_schedules()
+        sheet.append(
+            ["SKU", "NAMA", "AKTIF", "URUTAN"] +
+            [f"KAPASITAS_{schedule.code}" for schedule in schedules]
+        )
+        sheet.freeze_panes = "E2"
+        sheet.auto_filter.ref = f"A1:{sheet.cell(1, 4 + len(schedules)).column_letter}1"
         for cell in sheet[1]:
             cell.font = Font(name="Calibri", bold=True, color="FFFFFF")
             cell.fill = PatternFill(fill_type="solid", fgColor="1768AC")
             cell.alignment = Alignment(horizontal="center")
         for col, width in {"A": 25, "B": 48, "C": 20, "D": 15}.items():
             sheet.column_dimensions[col].width = width
+        for col in sheet[1][4:]:
+            sheet.column_dimensions[col.column_letter].width = 23
         dropdown = DataValidation(
             type="list", formula1='"Aktif,Nonaktif"', allow_blank=True,
         )
@@ -304,6 +310,9 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
             ["NAMA", "Opsional untuk pengecekan; tidak digunakan untuk mengubah master Odoo."],
             ["AKTIF", "Aktif / Nonaktif. Jika kosong, dianggap Aktif."],
             ["URUTAN", "Bilangan 0 atau lebih; jika kosong memakai urutan baris Excel."],
+            ["KAPASITAS_*", "Satu kolom per jadwal produksi aktif, contoh KAPASITAS_SUBUH. Isi angka Qty bulat tanpa titik/koma. Kosong mempertahankan kapasitas lama atau belum diatur untuk SKU baru; 0 berarti kapasitas nol."],
+            ["PENTING", "Kapasitas SKU diatur di sini bersamaan dengan pemilihan dapur, bukan di Qty pesanan toko."],
+            ["PENTING", "Untuk konsolidasi produksi, kapasitas jadwal yang belum diatur akan memblokir penyimpanan rencana."],
             ["PENTING", "Baris SKU yang tidak tercantum TIDAK dihapus atau dinonaktifkan."],
             ["PENTING", "Untuk menonaktifkan SKU, masukkan SKU tersebut dan pilih Nonaktif."],
             ["PENTING", "Qty pesanan tidak diisi di Excel; Qty diisi Admin Toko saat memesan."],
@@ -314,6 +323,11 @@ class ProductionAssignmentAdmin(admin.ModelAdmin):
         note.column_dimensions["B"].width = 105
         note["A1"].font = Font(bold=True)
         note["B1"].font = Font(bold=True)
+        for schedule in schedules:
+            note.append([
+                f"KAPASITAS_{schedule.code}",
+                f"Kapasitas produksi untuk {schedule.production_label or schedule.name}. Qty integer dalam UoM asli SKU dari master Odoo.",
+            ])
         stream = BytesIO()
         wb.save(stream)
         response = HttpResponse(
