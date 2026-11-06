@@ -133,7 +133,7 @@ Panduan: [Workspace Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
 
 **Keputusan bisnis terbaru (2026-11-06): tanggal produksi ditentukan manual oleh Admin Produksi**, bukan dihitung H-1/H-2 atau diisi otomatis menurut jadwal kirim. Untuk lingkup `JP / SUBUH / kirim 2026-11-07`, operator memilih tanggal produksinya sendiri sebelum simpan.
 
-Dokumen desain berikutnya: **[Kontrak Bisnis Konsolidasi Produksi V1](docs/KONTRAK-KONSOLIDASI-PRODUKSI-V1.md)**. Kontrak mencakup sumber hanya order KIRIM, Qty Requested → Planned, audit, pelacakan order asal, anti-duplikasi, transaksi atomik dan status menjadi PROSES_PRODUKSI setelah rencana tersimpan. **Masih dokumen review; belum ada implementasi penyimpanan.** **Jadwal produksi wajib disimpan terpisah dari jadwal kirim**, dan layar perencanaan mendatang wajib memperlihatkan **Qty Pesan, Qty Kapasitas Produksi, dan Qty Produksi**. Admin Produksi tidak boleh memecah/mengubah permintaan pengiriman **500 Pcs SUBUH** menjadi **250 SUBUH + 250 PAGI**. Qty Kapasitas berasal dari ProductCapacity berdasarkan SKU × **jadwal produksi**; kekurangan kapasitas harus ditampilkan. **Keputusan terbaru:** jika Qty Pesan **500 Pcs**, kapasitas tersedia **400 Pcs**, Admin Produksi **boleh menyimpan Qty Produksi 400 Pcs dengan kekurangan 100 Pcs tetap tercatat/terlihat**. Qty dan jadwal kirim toko tidak berubah dan kekurangan bukan pemenuhan otomatis. Perhitungan kekurangan rencana `max(0, requested - planned)` dipisahkan dari selisih kapasitas `max(0, requested - available_capacity)`. Kebijakan alokasi pelaksanaan lintas jadwal tanpa mengubah jadwal kirim, Qty Produksi melebihi kapasitas, approval dan tindak lanjut kekurangan masih perlu disepakati. Belum ada migrasi/skema/UI untuk fitur konsolidasi ini.
+Dokumen desain berikutnya: **[Kontrak Bisnis Konsolidasi Produksi V1](docs/KONTRAK-KONSOLIDASI-PRODUKSI-V1.md)**. Kontrak mencakup sumber hanya order KIRIM, Qty Requested → Planned, audit, pelacakan order asal, anti-duplikasi, transaksi atomik dan status menjadi PROSES_PRODUKSI setelah rencana tersimpan. **Konsolidasi produksi lokal V1 kini telah diimplementasikan** (tanggal/jadwal produksi eksplisit, kapasitas, Qty Pesan/Produksi/Kekurangan, histori). MO/transfer Odoo belum tersedia. **Jadwal produksi wajib disimpan terpisah dari jadwal kirim**, dan layar perencanaan mendatang wajib memperlihatkan **Qty Pesan, Qty Kapasitas Produksi, dan Qty Produksi**. Admin Produksi tidak boleh memecah/mengubah permintaan pengiriman **500 Pcs SUBUH** menjadi **250 SUBUH + 250 PAGI**. Qty Kapasitas berasal dari ProductCapacity berdasarkan SKU × **jadwal produksi**; kekurangan kapasitas harus ditampilkan. **Keputusan terbaru:** jika Qty Pesan **500 Pcs**, kapasitas tersedia **400 Pcs**, Admin Produksi **boleh menyimpan Qty Produksi 400 Pcs dengan kekurangan 100 Pcs tetap tercatat/terlihat**. Qty dan jadwal kirim toko tidak berubah dan kekurangan bukan pemenuhan otomatis. Perhitungan kekurangan rencana `max(0, requested - planned)` dipisahkan dari selisih kapasitas `max(0, requested - available_capacity)`. Kebijakan alokasi pelaksanaan lintas jadwal tanpa mengubah jadwal kirim, Qty Produksi melebihi kapasitas, approval dan tindak lanjut kekurangan masih perlu disepakati. Belum ada migrasi/skema/UI untuk fitur konsolidasi ini.
 
 Untuk menyegarkan aplikasi di Debian **hanya setelah ada perubahan kode yang sudah di-merge**:
 ```bash
@@ -143,3 +143,17 @@ docker compose up -d --build --force-recreate api
 ```
 
 PR dokumentasi kontrak ini **tidak memerlukan rebuild, migrasi database, atau perubahan Odoo**.
+
+## Konsolidasi Produksi V1 (local, belum Odoo)
+Pada `/produksi/`, order **KIRIM** punya tombol **Rencanakan** yang membuka halaman perencanaan (bukan pop-up Lihat Rekap). Operator wajib memilih **Tanggal Produksi manual** dan **Jadwal Produksi**, terpisah dari tanggal/jadwal kirim toko yang read-only. Tabel menampilkan per SKU `Qty Pesan | Kapasitas Master | Terpakai | Tersisa | Qty Produksi | Kekurangan`.
+Qty Produksi harus integer positif dan tidak melebihi **Qty Pesan** maupun **kapasitas yang tersisa** pada tanggal/jadwal produksi tersebut. Jika pesanan 500 Pcs, kapasitas 400 Pcs, rencana 400 Pcs boleh disimpan dengan **100 Pcs kekurangan** tersimpan dalam histori. Tidak ada split/migrasi jadwal kirim toko. Master kapasitas belum diatur → simpan ditolak hingga dikonfigurasi.
+Simpan mencatat ProductionPlan/Line, snapshot sumber StoreOrder, AuditLog, Qty Kekurangan, dan memindah status KIRIM → PROSES_PRODUKSI **atomik**. Setelah tersimpan, tombol **Lihat Rencana** membuka histori kekurangan. **Tidak membuat MO, tidak menghitung BoM batch, tidak mengirim Odoo**.
+`ProductionPlan.production_schedule` kini terpisah dari `delivery_schedule` (migration `0004`, production_schedule historis NULL, tidak ditebak). Sebelum deploy, pastikan **backup PostgreSQL** tersedia. Setelah merge:
+```bash
+cd ~/RO-YUSSIAKMAL
+git pull origin main
+docker compose up -d --build --force-recreate api
+docker compose exec api python manage.py migrate --noinput
+docker compose exec api python manage.py check
+```
+Panduan: [Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md), [Kontrak](docs/KONTRAK-KONSOLIDASI-PRODUKSI-V1.md).
