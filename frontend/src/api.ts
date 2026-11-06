@@ -230,6 +230,7 @@ export type ProductionInboxFilter = "ALL" | ProductionQueueStatus;
 export interface ProductionInboxOrder {
   order_id: number;
   status: ProductionQueueStatus;
+  plan_id: number | null;
   store_code: string;
   store_name: string;
   kitchen_code: string;
@@ -259,5 +260,92 @@ export function loadProductionInbox(
   const query = new URLSearchParams({ status, page: String(page) });
   return apiRequest<ProductionInbox>(
     "/api/v1/production/orders/?" + query.toString(), { signal },
+  );
+}
+
+export interface ConsolidationItem {
+  product_id: number;
+  sku: string;
+  name: string;
+  uom: string;
+  qty_requested: string;
+  capacity_qty: string | null;
+  capacity_used: string | null;
+  capacity_available: string | null;
+  sources?: { order_id: number; store_code: string; store_name: string; qty: string }[];
+}
+export interface ConsolidationPreview {
+  kitchen: NamedOption;
+  delivery_date: string;
+  delivery_schedule: NamedOption;
+  production_date: string | null;
+  production_schedule: NamedOption | null;
+  production_schedules: NamedOption[];
+  order_ids: number[];
+  orders: { order_id: number; store_code: string; store_name: string }[];
+  items: ConsolidationItem[];
+}
+export interface ConsolidationPlanItem extends ConsolidationItem {
+  qty_planned: string;
+  qty_shortfall: string;
+  qty_mo: string | null;
+}
+export interface ConsolidationDetail {
+  plan_id: number;
+  status: string;
+  kitchen: NamedOption;
+  delivery_date: string;
+  delivery_schedule: NamedOption;
+  production_date: string;
+  production_schedule: NamedOption | null;
+  sources: {
+    order_id: number;
+    store_code: string;
+    store_name: string;
+    lines_snapshot: { product_id: number; sku: string; name: string; uom: string; qty: string }[];
+  }[];
+  items: ConsolidationPlanItem[];
+  shortfall_sku_count: number;
+  note: string;
+}
+
+export function loadConsolidationPreview(
+  scope: {
+    kitchen_code: string;
+    delivery_date: string;
+    delivery_schedule_code: string;
+    production_date?: string;
+    production_schedule_code?: string;
+  },
+  signal?: AbortSignal,
+): Promise<ConsolidationPreview> {
+  const query = new URLSearchParams(scope);
+  return apiRequest<ConsolidationPreview>(
+    "/api/v1/production/consolidation/preview/?" + query.toString(),
+    { signal },
+  );
+}
+
+export function saveConsolidation(
+  request: {
+    kitchen_code: string;
+    delivery_date: string;
+    delivery_schedule_code: string;
+    production_date: string;
+    production_schedule_code: string;
+    order_ids: number[];
+    items: { product_id: number; qty_planned: string }[];
+  },
+): Promise<{ plan_id: number; order_ids: number[]; shortfall_sku_count: number; detail: string }> {
+  return apiRequest("/api/v1/production/consolidations/", {
+    method: "POST", body: JSON.stringify(request),
+  });
+}
+
+export function loadConsolidationDetail(
+  planId: number, signal?: AbortSignal,
+): Promise<ConsolidationDetail> {
+  return apiRequest<ConsolidationDetail>(
+    "/api/v1/production/consolidations/" + planId + "/", { signal },
   );
 }

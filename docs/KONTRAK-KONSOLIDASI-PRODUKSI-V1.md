@@ -1,7 +1,7 @@
 # Kontrak Bisnis Konsolidasi Produksi V1
 
 **Tanggal pembaruan:** 2026-11-06  
-**Status:** Rancangan kontrak bisnis untuk implementasi berikutnya; **belum ada fitur simpan konsolidasi**.  
+**Status:** Kontrak bisnis dengan **implementasi Konsolidasi Produksi V1 tahap awal**. MO/BoM/transfer Odoo masih belum tersedia.  
 **Sumber keputusan:** pembahasan pemisahan tanggal/jadwal produksi dari tanggal/jadwal kirim, larangan memecah komitmen pengiriman toko, dan kewajiban menampilkan kapasitas produksi.
 
 Istilah: **DISEPAKATI** berarti keputusan eksplisit operasional; **USULAN** berarti rekomendasi rancangan yang belum disahkan; **TERBUKA** berarti keputusan bisnis masih diperlukan.
@@ -84,13 +84,13 @@ Setiap baris SKU dalam workspace perencanaan **wajib** memperlihatkan **secara b
 - Qty historis yang benar-benar pecahan atau tidak valid **memblokir simpan**; tidak ada pembulatan tersembunyi.
 - Multi-UoM untuk **SKU yang sama** belum didukung skema `StoreOrderLine` saat ini; implementasi perlu aturan konversi terverifikasi dan relasi UoM per baris sebelum diperbolehkan.
 
-## 6. Alur UI yang ditargetkan (belum tersedia)
+## 6. Alur UI Konsolidasi V1 (sudah tersedia)
 
 1. Admin Produksi melihat seluruh pesanan KIRIM / PROSES PRODUKSI dalam antrean global. Tombol **Lihat Rekap** tetap membuka modal baca-saja, lalu kembali fokus ke antrean.
 2. Tindakan terpisah **Rencanakan/Konsolidasi Produksi** membuka workspace yang menampilkan **tanggal kirim + jadwal kirim** secara read-only dan field **tanggal produksi + jadwal produksi** secara eksplisit.
 3. Tabel SKU memuat **Qty Pesan | Qty Kapasitas Produksi | Qty Produksi**, beserta UoM, kapasitas terpakai/tersisa bila relevan, dan peringatan selisih.
 4. **Pratinjau** tetap read-only terhadap database; perubahan Qty Produksi dalam formulir lokal belum mengubah order, status atau Odoo.
-5. **Simpan Konsolidasi** (fitur berikutnya) harus mengizinkan Qty Produksi di bawah Qty Pesan ketika kapasitas tidak cukup, **menyimpan Qty Pesan/Produksi/Kapasitas dan kekurangannya**, serta mempertahankan jadwal kirim toko. Ketentuan lain yang belum diputuskan tetap divalidasi secara konservatif.
+5. **Simpan Konsolidasi** tersedia dan mengizinkan Qty Produksi di bawah Qty Pesan ketika kapasitas tidak cukup. Rencana menyimpan Qty Pesan/Produksi/Kapasitas dan kekurangan; jadwal kirim toko tetap utuh. Aturan yang belum diputuskan dijaga oleh batas konservatif V1 (lihat bagian implementasi).
 
 ## 7. Transaksi, anti-duplikasi dan audit
 
@@ -140,3 +140,23 @@ Persyaratan implementasi saat simpan:
 - Pengujian implementasi wajib memastikan save berhasil untuk 500/400/400, snapshot Qty dan shortage bertahan setelah reload, status sumber tidak berubah sebelum transaksi berhasil, dan jadwal pengiriman tetap SUBUH.
 
 **Batas saat ini:** dokumen ini **bukan** implementasi form/API simpan konsolidasi. Tahap tersebut tetap memerlukan migrasi aman pemisahan jadwal produksi, relasi sumber, validasi kapasitas efektif, dan pengujian transaksi.
+
+## 11. Implementasi Konsolidasi Produksi V1 (2026-11-06)
+
+**Fitur yang diimplementasikan:**
+- `ProductionPlan.production_date` diisi manual; `ProductionPlan.production_schedule` eksplisit dan berbeda dari `delivery_schedule` (hasil rename kolom lama `schedule`, sehingga data historis jadwal **kirim** tetap utuh).
+- `GET /api/v1/production/consolidation/preview/` menerima `kitchen_code`, `delivery_date`, `delivery_schedule_code`, opsional `production_date` dan `production_schedule_code`. Hanya agregasi pesanan **KIRIM**, bukan PROSES_PRODUKSI; respons menampilkan Qty Pesan, kapasitas master, kapasitas terpakai dan tersisa, serta sumber toko.
+- `POST /api/v1/production/consolidations/` menerima lingkup, **tanggal dan jadwal produksi eksplisit**, `order_ids` hasil pratinjau, dan `items[{product_id,qty_planned}]`. Validasi server mengunci pesanan dan baris kapasitas, memeriksa ulang scope dan Qty, lalu menyimpan rencana, snapshot pesanan sumber, Qty kapasitas master/terpakai/kekurangan, AuditLog, serta status `KIRIM → PROSES_PRODUKSI` **dalam satu transaksi**. Permintaan ulang ditolak sebagai konflik, bukan membuat dua rencana.
+- `GET /api/v1/production/consolidations/{plan_id}/` menampilkan kembali rencana tersimpan beserta **kekurangan per SKU** dan asal toko. Inbox menyertakan `plan_id` sehingga tersedia aksi **Lihat Rencana**.
+- Di `/produksi/` ada aksi **Rencanakan** pada pesanan KIRIM, form penuh (bukan modal rekap), tabel **Qty Pesan | Kapasitas | Terpakai | Tersisa | Qty Produksi | Kekurangan**. Lihat Rekap tetap pop-up baca-saja.
+- `ProductionPlanLine.qty_mo` dan `batch_qty` sekarang boleh `NULL` (berarti **belum dihitung**, bukan Qty palsu). `capacity_qty` merekam master, `capacity_used_before` merekam penggunaan pada slot itu sebelum rencana baru, `qty_shortfall` merekam selisih pesan-produksi.
+- `ProductionPlanSource.order` mempunyai relasi satu-ke-satu untuk anti-konsolidasi-ganda dan `lines_snapshot` menyimpan Qty/nama/SKU/UoM sumber. Constraint unik parsial menjaga satu scope pengiriman untuk rencana **baru**, sementara rencana historis dengan production_schedule NULL **tidak diberi slot tebakan** dan harus direkonsiliasi bila bentrok.
+
+**Batas aman sementara (aturan ini bukan keputusan bisnis permanen):**
+- Qty Produksi harus bilangan bulat **minimal 1**, tidak boleh melampaui **Qty Pesan** atau **kapasitas tersisa** pada tanggal dan jadwal produksi yang dipilih. Qty lebih rendah dari permintaan **diizinkan**, kekurangan tersimpan dan terlihat.
+- **Kapasitas master belum diatur ⇒ tidak boleh simpan**, bukan diasumsikan nol atau tanpa batas. Kapasitas sudah dipakai oleh rencana lain pada tanggal + jadwal produksi yang sama ikut dikurangkan, menggunakan lock record ProductCapacity saat transaksi.
+- Satu kelompok `dapur × tanggal kirim × jadwal kirim` hanya boleh mempunyai **satu rencana V1**; belum ada split ke beberapa jadwal produksi untuk *kelompok kirim yang sama*. Kelompok pengiriman berbeda boleh menggunakan SKU sama pada tanggal produksi sama dalam jadwal produksi berbeda.
+- Tanggal produksi **tidak diberi default otomatis** atau aturan batas tanggal kirim yang belum disepakati. Jadwal produksi dipilih eksplisit dari master Schedule yang aktif (master yang sama, FK terpisah).
+- `PROSES_PRODUKSI` berarti sudah masuk rencana dan **bukan** pemenuhan total kebutuhan; Qty Kekurangan harus tetap terlihat. Belum ada re-open, perubahan Qty rencana pascasimpan, aksi pengisian kekurangan ke toko, MO, BoM, kapasitas setelah pembulatan batch, atau Odoo write.
+
+**Acceptance test tambahan:** 500 Pcs requested + 400 Pcs capacity + 400 Pcs planned ⇒ plan tersimpan, shortage 100, order toko tetap SUBUH 500, prod schedule terpisah, MO/batch NULL; replay/overcapacity/missing-capacity/Qty pecahan ditolak tanpa rencana parsial, history menampilkan shortage.

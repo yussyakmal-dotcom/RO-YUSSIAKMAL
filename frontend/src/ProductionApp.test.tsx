@@ -33,14 +33,14 @@ const inbox: ProductionInbox = {
   counts: { all: 2, kirim: 2, proses_produksi: 0 },
   items: [
     {
-      order_id: 1, status: "KIRIM", store_code: "T_BAN",
+      order_id: 1, status: "KIRIM", plan_id: null, store_code: "T_BAN",
       store_name: "Toko Bandara", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
       schedule_name: "Subuh", sku_count: 18, qty_total: "1232.0000", qty_uom: "pcs", qty_by_uom: [{uom:"pcs",qty:"1232"}], qty_invalid:false,
       auto_submitted: false,
     },
     {
-      order_id: 2, status: "KIRIM", store_code: "T_KD",
+      order_id: 2, status: "KIRIM", plan_id: null, store_code: "T_KD",
       store_name: "Toko Kedaton", kitchen_code: "JP", kitchen_name: "Dapur JP",
       delivery_date: "2026-11-07", schedule_code: "SUBUH",
       schedule_name: "Subuh", sku_count: 6, qty_total: "413.0000", qty_uom: "pcs", qty_by_uom: [{uom:"pcs",qty:"413"}], qty_invalid:false,

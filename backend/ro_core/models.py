@@ -195,22 +195,36 @@ class ProductionPlan(models.Model):
     kitchen = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
     production_date = models.DateField()
     delivery_date = models.DateField()
-    schedule = models.ForeignKey(Schedule, on_delete=models.PROTECT)
+    # The renamed field is still the STORE delivery schedule. Never infer the
+    # physical production schedule from a store's delivery schedule.
+    delivery_schedule = models.ForeignKey(
+        Schedule, on_delete=models.PROTECT, related_name="delivery_plans"
+    )
+    # NULL protects historical plans: no fabricated production-slot mapping.
+    # Newly created consolidations always require an explicit active slot.
+    production_schedule = models.ForeignKey(
+        Schedule, on_delete=models.PROTECT, related_name="production_plans",
+        null=True, blank=True,
+    )
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.DRAFT
     )
 
     class Meta:
         constraints = [
+            # V1 does not split a store delivery scope across production plans.
+            # Distinct delivery scopes can still share a production date/SKU
+            # while using different production schedules.
             models.UniqueConstraint(
-                fields=["kitchen", "production_date", "delivery_date", "schedule"],
-                name="uq_ro_production_plan",
+                fields=["kitchen", "delivery_date", "delivery_schedule"],
+                condition=Q(production_schedule__isnull=False),
+                name="uq_ro_plan_delivery_scope",
             )
         ]
         indexes = [
             models.Index(
-                fields=["production_date", "schedule"],
-                name="ix_ro_plan_date",
+                fields=["production_date", "production_schedule"],
+                name="ix_ro_plan_prod_slot",
             )
         ]
 
@@ -222,12 +236,19 @@ class ProductionPlanLine(models.Model):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     qty_requested = qty_field()
     qty_planned = qty_field()
-    qty_mo = qty_field()
+    # Consolidation doesn't calculate an MO or BoM batch. NULL means
+    # not yet calculated, instead of a fabricated quantity.
+    qty_mo = models.DecimalField(
+        max_digits=18, decimal_places=4, null=True, blank=True, default=None,
+        validators=[MinValueValidator(ZERO)],
+    )
     batch_qty = models.DecimalField(
-        max_digits=18, decimal_places=4,
+        max_digits=18, decimal_places=4, null=True, blank=True, default=None,
         validators=[MinValueValidator(POSITIVE)],
     )
     capacity_qty = qty_field()
+    capacity_used_before = qty_field()
+    qty_shortfall = qty_field()
     bom_snapshot = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -243,6 +264,24 @@ class ProductionPlanLine(models.Model):
                 condition=Q(batch_qty__gt=0), name="ck_ro_batch_positive"
             ),
         ]
+
+
+class ProductionPlanSource(models.Model):
+    """One source order belongs to at most one production plan in V1.
+
+    Immutable line snapshot prevents later changes to Odoo master UoM or
+    product names from changing the interpreted original store request.
+    """
+    plan = models.ForeignKey(
+        ProductionPlan, on_delete=models.PROTECT, related_name="sources"
+    )
+    order = models.OneToOneField(
+        StoreOrder, on_delete=models.PROTECT, related_name="production_source"
+    )
+    lines_snapshot = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["order_id"]
 
 
 class MaterialRequestLine(models.Model):
