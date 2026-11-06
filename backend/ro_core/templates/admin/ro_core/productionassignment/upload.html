@@ -26,7 +26,7 @@
     <thead><tr><th>Baris</th><th>SKU</th><th>Nama dari Odoo</th><th>UoM Odoo</th><th>Status Template</th><th>Urutan</th>{% for schedule in preview.schedule_columns %}<th>Kapasitas {{ schedule.production_label|default:schedule.name }}</th>{% endfor %}<th>Tindakan</th></tr></thead>
     <tbody>
       {% for row in preview.rows|slice:":100" %}
-      <tr><td>{{ row.row_number }}</td><td>{{ row.sku }}</td><td>{{ row.name|default:"(tidak ditemukan)" }}</td><td>{% if row.is_active %}Aktif{% else %}Nonaktif{% endif %}</td><td>{{ row.sort_order }}</td>{% for value in row.capacity_cells %}<td>{{ value }}</td>{% endfor %}<td>{{ row.action|default:"PERIKSA" }}</td></tr>
+      <tr><td>{{ row.row_number }}</td><td>{{ row.sku }}</td><td>{{ row.name|default:"(tidak ditemukan)" }}</td><td>{{ row.uom|default:"—" }}</td><td>{% if row.is_active %}Aktif{% else %}Nonaktif{% endif %}</td><td>{{ row.sort_order }}</td>{% for value in row.capacity_cells %}<td>{{ value }}</td>{% endfor %}<td>{{ row.action|default:"PERIKSA" }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
