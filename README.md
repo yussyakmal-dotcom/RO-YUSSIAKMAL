@@ -145,9 +145,9 @@ docker compose up -d --build --force-recreate api
 PR dokumentasi kontrak ini **tidak memerlukan rebuild, migrasi database, atau perubahan Odoo**.
 
 ## Konsolidasi Produksi V1 (local, belum Odoo)
-Pada `/produksi/`, order **KIRIM** punya tombol **Rencanakan** yang membuka halaman perencanaan (bukan pop-up Lihat Rekap). Operator wajib memilih **Tanggal Produksi manual** dan **Jadwal Produksi**, terpisah dari tanggal/jadwal kirim toko yang read-only. Tabel menampilkan per SKU `Qty Pesan | Kapasitas Master | Terpakai | Tersisa | Qty Produksi | Kekurangan`.
+Pada `/produksi/`, tombol **Rencanakan** dan **Lihat Rencana** sekarang membuka **modal/pop-up di atas antrean**, sama seperti **Lihat Rekap**. Daftar, filter, pagination dan posisi scroll tetap berada di belakang; pengguna tidak berpindah halaman atau menggulir ke bawah untuk mencari form. Operator wajib memilih **Tanggal Produksi manual** dan **Jadwal Produksi**, terpisah dari tanggal/jadwal kirim toko yang read-only. Tabel menampilkan per SKU `Qty Pesan | Kapasitas Master | Terpakai | Tersisa | Qty Produksi | Kekurangan`.
 Qty Produksi harus integer positif dan tidak melebihi **Qty Pesan** maupun **kapasitas yang tersisa** pada tanggal/jadwal produksi tersebut. Jika pesanan 500 Pcs, kapasitas 400 Pcs, rencana 400 Pcs boleh disimpan dengan **100 Pcs kekurangan** tersimpan dalam histori. Tidak ada split/migrasi jadwal kirim toko. Master kapasitas belum diatur → simpan ditolak hingga dikonfigurasi.
-Simpan mencatat ProductionPlan/Line, snapshot sumber StoreOrder, AuditLog, Qty Kekurangan, dan memindah status KIRIM → PROSES_PRODUKSI **atomik**. Setelah tersimpan, tombol **Lihat Rencana** membuka histori kekurangan. **Tidak membuat MO, tidak menghitung BoM batch, tidak mengirim Odoo**.
+Simpan mencatat ProductionPlan/Line, snapshot sumber StoreOrder, AuditLog, Qty Kekurangan, dan memindah status KIRIM → PROSES_PRODUKSI **atomik**. Setelah tersimpan, tombol **Lihat Rencana** membuka histori kekurangan sebagai pop-up baca-saja. **Tidak membuat MO, tidak menghitung BoM batch, tidak mengirim Odoo**.
 `ProductionPlan.production_schedule` kini terpisah dari `delivery_schedule` (migration `0004`, production_schedule historis NULL, tidak ditebak). Sebelum deploy, pastikan **backup PostgreSQL** tersedia. Setelah merge:
 ```bash
 cd ~/RO-YUSSIAKMAL
@@ -157,3 +157,9 @@ docker compose exec api python manage.py migrate --noinput
 docker compose exec api python manage.py check
 ```
 Panduan: [Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md), [Kontrak](docs/KONTRAK-KONSOLIDASI-PRODUKSI-V1.md).
+
+### Perilaku modal Rencanakan dan Lihat Rencana
+- Klik **Rencanakan** atau **Lihat Rencana** membuka `<dialog>` modal native, **bukan** halaman baru, konten inline yang turun, atau tab browser baru. Popup lebar/tinggi responsif dengan scroll di dalam, header dan tombol aksi tetap terlihat.
+- Tekan ×, tombol **Batal / Tutup** (atau **Tutup Rencana**), **Esc**, atau area backdrop untuk kembali ke daftar. Fokus kembali ke tombol pemicu; filter, pagination, dan posisi daftar tetap terjaga. Membuka/menutup tanpa simpan tidak memanggil ulang inbox.
+- Setelah konsolidasi berhasil tersimpan, histori tetap tampil di modal. Inbox diperbarui **ketika modal ditutup**, lalu fokus diarahkan ke tombol pengganti **Lihat Rencana** pada baris yang sama, atau tab filter bila baris keluar dari filter aktif.
+- Modal tidak dapat ditutup saat request Simpan Konsolidasi sedang berlangsung, agar tidak menimbulkan kesan salah bahwa penyimpanan dibatalkan. Tidak mengubah aturan backend, migrasi, Qty/UoM, atau MO/Odoo.
