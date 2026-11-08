@@ -191,3 +191,11 @@ Persyaratan implementasi saat simpan:
 6. Hapus draft hanya setelah finalisasi (V1). Kebijakan buang/reset draft lama merupakan keputusan terpisah. Audit CREATE/UPDATE draft ditulis ke AuditLog action SAVE_DRAFT.
 
 **Implementasi:** model `ProductionConsolidationDraft` dan migration 0005; endpoint `GET/POST /api/v1/production/consolidation/draft/`; frontend modal Rencanakan/Lanjutkan Draft, Simpan Draft, dan Simpan Konsolidasi. **Status ProductionPlan.DRAFT sebelumnya tetap berarti rencana lokal yang sudah dikonsolidasi**, bukan draft isian parsial.
+
+
+## 14. Antrean per lingkup tanggal kirim, bukan per toko (8 November 2026)
+- **Keputusan UX:** pekerjaan Admin Produksi ditampilkan sebagai satu baris untuk setiap **tanggal kirim × dapur × jadwal kirim**. Tanggal adalah pengelompokan visual teratas; jangan menggabungkan lintas dapur atau jadwal pengiriman karena komitmen toko berbeda.
+- Qty permintaan dalam kelompok dihitung per SKU dan UoM yang sama; rincian toko tetap dapat ditelusuri. Tab status/pagination dihitung per kelompok, bukan per order.
+- Aksi Rencanakan, Lanjutkan Draft dan Lihat Rencana harus beroperasi pada kelompok yang sama dengan kontrak `ProductionConsolidationDraft` dan `ProductionPlan`. Membuka salah satu toko dalam kelompok tidak membuat rencana kedua.
+- Jika sudah ada plan dan muncul pesanan KIRIM susulan untuk lingkup itu, kelompok ditandai **Pesanan Susulan**, akses Lihat Rencana lama tetap ada, **tidak boleh membuat rencana baru otomatis**. Penanganan pesanan susulan belum ditentukan.
+- Endpoint antrean baru `GET /api/v1/production/delivery-queue/` read-only; endpoint per toko lama tetap dipertahankan untuk kompatibilitas. Tidak ada migrasi DB.
