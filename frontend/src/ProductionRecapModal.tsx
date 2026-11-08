@@ -5,7 +5,7 @@ import {
 } from "./api";
 
 type ProductionRecapModalProps = {
-  order: ProductionInboxOrder;
+  order: ProductionScope & { store_count?: number; store_name?: string; order_id?: number };
   report: ProductionDemand | null;
   loading: boolean;
   error: string;
