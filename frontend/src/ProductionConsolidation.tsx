@@ -323,14 +323,14 @@ export default function ProductionConsolidation({
             <label htmlFor="production-date">Tanggal Produksi (manual)</label>
             {viewing ? <strong>{detail?.production_date || "—"}</strong> : (
               <input id="production-date" type="date" value={productionDate}
-                onChange={(event) => setProductionDate(event.target.value)} required />
+                onChange={(event) => setProductionDate(event.target.value)} disabled={draftLoading} required />
             )}
           </div>
           <div>
             <label htmlFor="production-schedule">Jadwal Produksi</label>
             {viewing ? <strong>{detail?.production_schedule?.name || "—"}</strong> : (
               <select id="production-schedule" value={productionScheduleCode}
-                onChange={(event) => setProductionScheduleCode(event.target.value)} required>
+                onChange={(event) => setProductionScheduleCode(event.target.value)} disabled={draftLoading} required>
                 <option value="">Pilih jadwal produksi</option>
                 {activeSchedules.map((schedule) => (
                   <option value={schedule.code} key={schedule.code}>
@@ -440,6 +440,7 @@ export default function ProductionConsolidation({
                               }
                             }}
                             aria-invalid={invalid}
+                            disabled={draftLoading}
                             placeholder="Isi Qty"
                           />
                           <small>{item.uom}</small>
