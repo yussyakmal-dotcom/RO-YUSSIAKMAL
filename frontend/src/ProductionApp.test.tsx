@@ -178,7 +178,7 @@ describe("Antrean produksi per tanggal kirim", () => {
     await screen.findByText("500 Pcs");
     expect(screen.getByText("Kelompok Tanggal Kirim")).toBeTruthy();
     expect(screen.getAllByText(/Tanggal Kirim —/).length).toBe(2);
-    expect(screen.getAllByText("7/11/2026").length).toBe(0);
+    expect(screen.queryAllByText("7/11/2026")).toHaveLength(0);
     expect(screen.getByText("2 toko")).toBeTruthy();
     expect(screen.getByText("1 toko")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Rencanakan" })).toHaveLength(2);
