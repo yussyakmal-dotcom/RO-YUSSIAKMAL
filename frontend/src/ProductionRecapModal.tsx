@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { formatProductionQty, productionQtyLabel } from "./productionQty";
 import {
-  type ProductionDemand, type ProductionInboxOrder,
+  type ProductionDemand, type ProductionScope,
 } from "./api";
 
 type ProductionRecapModalProps = {
-  order: ProductionInboxOrder;
+  order: ProductionScope & { store_count?: number; store_name?: string; order_id?: number };
   report: ProductionDemand | null;
   loading: boolean;
   error: string;
@@ -62,8 +62,10 @@ export default function ProductionRecapModal({
               Tanggal kirim {order.delivery_date} · Jadwal {order.schedule_name}
             </p>
             <p className="production-recap-context">
-              Dibuka dari {order.store_name} (Order #{order.order_id}). Rekap mencakup
-              semua toko dengan dapur, tanggal, dan jadwal kirim yang sama.
+              {order.store_name && order.order_id
+                ? `Dibuka dari ${order.store_name} (Order #${order.order_id}). `
+                : `${order.store_count ?? "Semua"} toko dalam kelompok pengiriman ini. `}
+              Rekap mencakup semua toko dengan tanggal, dapur, dan jadwal kirim yang sama.
             </p>
           </div>
           <button

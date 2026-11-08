@@ -18,8 +18,8 @@ Buka `http://localhost:900/produksi/` dan login memakai superuser/ADMIN atau Gro
 
 - **Default Semua:** pesanan status KIRIM dan PROSES PRODUKSI seluruh tanggal/dapur/jadwal. Tidak ada filter tanggal otomatis.
 - **Filter Kirim** untuk antrean siap konsolidasi; **Proses Produksi** untuk pesanan yang sudah dikonsolidasi.
-- Tabel menampilkan Order ID, toko, tanggal kirim, dapur, jadwal kirim, jumlah SKU, total Qty, dan status.
-- Kirim ditampilkan lebih dahulu; pagination **50 pesanan per halaman**, tombol Sebelumnya/Berikutnya. Jadi daftar tidak diam-diam dipotong ke 30 pesanan terbaru.
+- Tabel utama sekarang menampilkan tanggal kirim, dapur, jadwal kirim, jumlah toko, SKU unik, Qty aman per UoM dan status per kelompok. Order ID/toko tersedia lewat Lihat toko.
+- Kirim ditampilkan lebih dahulu; pagination **50 kelompok pengiriman per halaman**, tombol Sebelumnya/Berikutnya. Jadi daftar tidak diam-diam dipotong ke 30 pesanan terbaru.
 - Klik **Lihat rekap** untuk membuka **modal di atas antrean** (bukan panel panjang di bawah tabel atau pindah halaman). Rekap menunjukkan total per SKU pada lingkup tanggal kirim/dapur/jadwal pesanan, termasuk asal toko dan statusnya. Daftar dan filter di belakang modal tidak berubah; tekan **Tutup Rekap**, ikon ×, **Esc**, atau klik area luar modal untuk kembali. Fokus keyboard kembali ke tombol `Lihat rekap` yang tadi dipilih.
 - Halaman ini **dapat menyimpan ProductionPlan lokal**, tetapi **belum membuat MO atau transfer Odoo**. Tanggal dan jadwal produksi diisi eksplisit oleh Admin Produksi.
 
@@ -206,3 +206,19 @@ Menu teknis Product Capacities hanya untuk inspeksi; gunakan Production Assignme
 **API:** `GET /api/v1/production/consolidation/draft/?kitchen_code=JP&delivery_date=2026-11-07&delivery_schedule_code=SUBUH` dan `POST /api/v1/production/consolidation/draft/` menggunakan scope yang sama dengan `production_date` nullable, `production_schedule_code` kosong bila belum dipilih, `items` Qty subset SKU, `order_ids` dan `version` untuk pengamanan konflik. Endpoint hanya untuk role PRODUCTION/ADMIN.
 
 **Migration:** `0005_production_consolidation_draft`. Setelah membuat backup PostgreSQL dan deploy dari main, jalankan `docker compose exec api python manage.py migrate --noinput`, kemudian cek migrasi dan layar. Tidak menulis ke Odoo.
+
+
+## Tampilan utama antrean berdasarkan Tanggal Kirim (8 November 2026)
+
+**Dasar pekerjaan:** Admin Produksi bukan mengonsolidasi setiap toko secara terpisah. Daftar utama sekarang mempunyai urutan **Tanggal Kirim → Dapur → Jadwal Kirim**. Satu baris adalah satu **lingkup konsolidasi**; beberapa toko dalam lingkup sama tidak lagi muncul sebagai baris utama sendiri.
+
+- Kolom: **Tanggal Kirim | Dapur/Jadwal Kirim | Pesanan Toko | SKU/Qty Gabungan | Status | Aksi**. Header tanggal membantu melihat kelompok hari yang sama.
+- Klik **Lihat toko (N)** pada baris untuk menampilkan nama toko, kode, Order ID dan status asal tanpa membuka halaman lain. **Lihat Rekap** tetap memunculkan pop-up rekap SKU lengkap dan rincian sumber.
+- Rencanakan/Lanjutkan Draft/Lihat Rencana tetap dalam modal besar, dan melibatkan **seluruh pesanan eligible dalam lingkup yang sama**, bukan satu toko saja. Draft tetap terkait lingkup tanggal/dapur/jadwal kirim dan tidak mereservasi kapasitas.
+- Qty ditampilkan dengan UoM asli Odoo per kelompok; nilai 1.0000 dari DB tampil sebagai **1**, dan Qty antar UoM berbeda **dipisahkan**. Baris dengan pecahan historis ditandai **Perlu koreksi Qty**, bukan dibulatkan.
+- Filter **Semua/Kirim/Proses Produksi** menghitung jumlah **kelompok pengiriman**. Pagination **50 kelompok per halaman di server**, sehingga beberapa toko dalam satu lingkup tidak terpecah lintas halaman. Urutan berdasarkan tanggal kirim paling awal, kemudian dapur dan jadwal.
+- **Pesanan Susulan:** bila pesanan baru KIRIM muncul pada lingkup yang sudah berstatus PROSES_PRODUKSI, kelompok diberi label Pesanan Susulan. Tidak boleh memilih Rencanakan kedua kali pada lingkup yang mempunyai ProductionPlan; Lihat Rencana untuk plan lama tetap tersedia. Butuh keputusan bisnis lanjutan untuk pesanan susulan.
+
+**API UI baru:** `GET /api/v1/production/delivery-queue/?status=ALL&page=1` mengembalikan daftar `items` per kelompok serta `counts`, `stores` dan `has_more`. API lama `GET /api/v1/production/orders/` tetap ada agar pemanggil sebelumnya tidak putus. Endpoint tidak melakukan penulisan; tidak perlu migrasi baru.
+
+Contoh: Toko Bandara + Toko Kedaton, keduanya **7 November 2026 · Dapur JP · SUBUH**, tampil sebagai **satu baris kelompok**, dengan rincian dua toko dan Qty subtotal sesuai UoM. Tanggal produksi tetap dipilih manual di pop-up Rencanakan, **bukan** disamakan dengan tanggal kirim.

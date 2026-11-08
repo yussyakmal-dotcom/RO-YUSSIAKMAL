@@ -3,13 +3,13 @@ import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
   loadProductionDraft, saveProductionDraft,
   type ConsolidationDetail, type ConsolidationPreview,
-  type ConsolidationItem, type ProductionInboxOrder,
+  type ConsolidationItem, type ProductionScope,
   type NamedOption,
 } from "./api";
 import { formatProductionQty } from "./productionQty";
 
 type Props = {
-  order: ProductionInboxOrder;
+  order: ProductionScope & { status?: string; plan_id?: number | null };
   planId: number | null;
   schedules: NamedOption[];
   onBack: () => void;

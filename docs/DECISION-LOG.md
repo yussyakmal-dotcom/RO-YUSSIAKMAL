@@ -280,3 +280,12 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **I-062 (✅ backend + migration 0005):** `ProductionConsolidationDraft` menyimpan satu draft bersama untuk setiap dapur × tanggal kirim × jadwal kirim, tanggal/jadwal produksi nullable, `planned_items`, snapshot ID sumber, versi dan pengubah terakhir. API GET/POST draft role PRODUCTION/ADMIN dengan optimistic lock. Audit SAVE_DRAFT. Finalisasi menghapus draft secara atomik setelah status dan rencana disimpan.
 - **I-063 (✅ frontend):** Modal Rencanakan menyediakan Simpan Draft dan Simpan Konsolidasi; draft yang disimpan dapat dibuka lewat **Lanjutkan Draft** pada order KIRIM. Perubahan belum tersimpan memunculkan konfirmasi saat menutup pop-up; filter/pagination tidak berubah.
 - **O-028 (❓ backlog):** Aturan pembersihan draft yang sangat lama, opsi buang draft/reset ke awal, dan historisasi revisi draft mendetail belum ditetapkan; versi saat ini tetap menyimpan audit setiap save.
+
+
+## Antrean kelompok tanggal kirim (8 November 2026)
+- **D-071 (✅ koreksi user):** Daftar pekerjaan Admin Produksi tidak seharusnya satu baris per toko; **tanggal kirim adalah pengelompokan utama**, diikuti dapur dan jadwal kirim. Admin Toko tetap pemilik Qty dan jadwal kirim per toko, tetapi Admin Produksi memutuskan produksi per kelompok.
+- **I-064 (✅ backend API read-only):** Tambah `/api/v1/production/delivery-queue/`: scope `tanggal kirim × dapur × jadwal kirim`, pagination/filter di tingkat kelompok, total SKU unik dan subtotal UoM aman, daftar sumber toko untuk drilldown. API `/production/orders/` lama tidak dihapus.
+- **I-065 (✅ frontend):** Antrean `/produksi/` sekarang mempunyai header tanggal dan baris kelompok dapur/jadwal, informasi jumlah toko/order dan `Lihat toko`. Tombol Lihat Rekap/Rencanakan/Lanjutkan Draft/Lihat Rencana berasal dari satu scope, tetap native modal; kembalikan fokus ke baris kelompok setelah menutup.
+- **D-072 (⚠️ batas aman pesanan susulan):** Jika scope berisi KIRIM dan PROSES_PRODUKSI (pesanan baru setelah plan disimpan), tampilkan **Pesanan Susulan** dan jangan menawarkan konsolidasi ulang otomatis. Pertahankan akses Lihat Rencana untuk plan lama. Pengelolaan order susulan dan alokasi kekurangan memerlukan kontrak bisnis baru.
+- **I-066 (✅ uji):** Backend & frontend menguji penggabungan dua toko menjadi satu scope, isolasi dapur/jadwal/tanggal, pagination tidak memotong scope, status campuran, Qty UoM, role, draft, dan modal.
+- **Batas:** Tidak mengubah Qty toko, ProductionPlan, migrasi DB, master kapasitas atau Odoo.

@@ -227,6 +227,49 @@ export function loadRecentSentOrders(signal?: AbortSignal): Promise<{ limit: num
 
 export type ProductionQueueStatus = "KIRIM" | "PROSES_PRODUKSI";
 export type ProductionInboxFilter = "ALL" | ProductionQueueStatus;
+export interface ProductionScope {
+  kitchen_code: string;
+  kitchen_name: string;
+  delivery_date: string;
+  schedule_code: string;
+  schedule_name: string;
+}
+
+export interface ProductionDeliveryGroup extends ProductionScope {
+  status: "KIRIM" | "PROSES_PRODUKSI" | "CAMPURAN";
+  order_count: number;
+  store_count: number;
+  kirim_count: number;
+  proses_produksi_count: number;
+  plan_id: number | null;
+  has_consolidation_draft: boolean;
+  sku_count: number;
+  qty_total: string | null;
+  qty_uom: string | null;
+  qty_by_uom: { uom: string; qty: string }[];
+  qty_invalid: boolean;
+  stores: { order_id: number; store_code: string; store_name: string; status: "KIRIM" | "PROSES_PRODUKSI" }[];
+}
+
+export interface ProductionDeliveryQueue {
+  status_filter: ProductionInboxFilter;
+  page: number;
+  page_size: number;
+  total: number;
+  has_more: boolean;
+  counts: { all: number; kirim: number; proses_produksi: number };
+  items: ProductionDeliveryGroup[];
+}
+
+export function loadProductionDeliveryQueue(
+  status: ProductionInboxFilter = "ALL", page = 1, signal?: AbortSignal,
+): Promise<ProductionDeliveryQueue> {
+  const query = new URLSearchParams({ status, page: String(page) });
+  return apiRequest<ProductionDeliveryQueue>(
+    "/api/v1/production/delivery-queue/?" + query.toString(), { signal },
+  );
+}
+
 export interface ProductionInboxOrder {
   order_id: number;
   status: ProductionQueueStatus;
