@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    ProductionAssignment, ProductionPlanSource, Schedule, StoreOrder, StoreOrderLine, Warehouse,
+    ProductionAssignment, ProductionConsolidationDraft, ProductionPlanSource, Schedule, StoreOrder, StoreOrderLine, Warehouse,
 )
 
 
@@ -341,6 +341,16 @@ def production_inbox(request):
     plan_by_order = dict(ProductionPlanSource.objects.filter(
         order_id__in=order_ids
     ).values_list("order_id", "plan_id"))
+    # One resumable draft belongs to the delivery scope, not individual orders.
+    # It is never a StoreOrder status and never reserves production capacity.
+    scopes = {(order.kitchen_id, order.delivery_date, order.schedule_id) for order in orders}
+    draft_scopes = set(
+        ProductionConsolidationDraft.objects.filter(
+            kitchen_id__in={x[0] for x in scopes},
+            delivery_date__in={x[1] for x in scopes},
+            delivery_schedule_id__in={x[2] for x in scopes},
+        ).values_list("kitchen_id", "delivery_date", "delivery_schedule_id")
+    )
     return Response({
         "status_filter": selected,
         "page": page,
@@ -357,6 +367,11 @@ def production_inbox(request):
                 "order_id": order.pk,
                 "status": order.status,
                 "plan_id": plan_by_order.get(order.pk),
+                "has_consolidation_draft": (
+                    order.status == StoreOrder.Status.KIRIM and
+                    (order.kitchen_id, order.delivery_date, order.schedule_id)
+                    in draft_scopes
+                ),
                 "store_code": order.store.code,
                 "store_name": order.store.name,
                 "kitchen_code": order.kitchen.code,
