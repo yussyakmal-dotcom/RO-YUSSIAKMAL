@@ -1,14 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import ProductionRecapModal from "./ProductionRecapModal";
 import ProductionConsolidation from "./ProductionConsolidation";
 import { productionQtyLabel } from "./productionQty";
 import FontSizeControl from "./FontSizeControl";
 import { LoginPage } from "./App";
 import {
-  initializeSession, loadProductionDemand, loadProductionInbox, logout,
-  type ProductionDemand, type ProductionInbox, type ProductionInboxFilter,
-  type ProductionInboxOrder, type SessionInfo,
+  initializeSession, loadProductionDemand, loadProductionDeliveryQueue, logout,
+  type ProductionDemand, type ProductionDeliveryQueue, type ProductionInboxFilter,
+  type ProductionDeliveryGroup, type SessionInfo,
 } from "./api";
+
+function deliveryScopeKey(group: ProductionDeliveryGroup): string {
+  return [group.delivery_date, group.kitchen_code, group.schedule_code].join("|");
+}
+
+function deliveryDateLabel(value: string): string {
+  return new Date(value + "T00:00:00").toLocaleDateString("id-ID", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
 
 function ProductionApp() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -17,21 +27,21 @@ function ProductionApp() {
   const [filter, setFilter] = useState<ProductionInboxFilter>("ALL");
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
-  const [inbox, setInbox] = useState<ProductionInbox | null>(null);
+  const [inbox, setInbox] = useState<ProductionDeliveryQueue | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState<ProductionInboxOrder | null>(null);
+  const [selected, setSelected] = useState<ProductionDeliveryGroup | null>(null);
   const [report, setReport] = useState<ProductionDemand | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const recapOpenerRef = useRef<HTMLButtonElement | null>(null);
   const [activeConsolidation, setActiveConsolidation] = useState<{
-    order: ProductionInboxOrder; planId: number | null;
+    order: ProductionDeliveryGroup; planId: number | null;
   } | null>(null);
   const consolidationOpenerRef = useRef<HTMLButtonElement | null>(null);
   const consolidationSavedRef = useRef(false);
   const pendingPlanFocusRef = useRef<{
-    orderId: number; previousInbox: ProductionInbox | null;
+    scopeKey: string; previousInbox: ProductionDeliveryQueue | null;
   } | null>(null);
 
   useEffect(() => {
@@ -58,7 +68,7 @@ function ProductionApp() {
     setLoading(true);
     // Keep the existing rows mounted during refresh, including while the
     // planning modal is open. No scroll jumps or disappearing opener buttons.
-    loadProductionInbox(filter, page, controller.signal).then((value) => {
+    loadProductionDeliveryQueue(filter, page, controller.signal).then((value) => {
       if (!controller.signal.aborted) setInbox(value);
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
@@ -95,7 +105,7 @@ function ProductionApp() {
     return () => controller.abort();
   }, [session, selected, refresh]);
 
-  const openRecap = (order: ProductionInboxOrder, opener: HTMLButtonElement) => {
+  const openRecap = (order: ProductionDeliveryGroup, opener: HTMLButtonElement) => {
     recapOpenerRef.current = opener;
     setSelected(order);
   };
@@ -115,9 +125,9 @@ function ProductionApp() {
         inbox === pending.previousInbox) return;
     pendingPlanFocusRef.current = null;
     window.requestAnimationFrame(() => {
-      const row = document.querySelector<HTMLTableRowElement>(
-        `tr[data-production-order-id="${pending.orderId}"]`
-      );
+      const row = Array.from(document.querySelectorAll<HTMLTableRowElement>(
+        "tr[data-delivery-scope]"
+      )).find((item) => item.dataset.deliveryScope === pending.scopeKey);
       // A successful save changes KIRIM to PROSES_PRODUKSI. The original
       // Rencanakan button may be replaced or disappear under the KIRIM tab.
       const target = row?.querySelector<HTMLButtonElement>(".production-plan-trigger")
@@ -129,7 +139,7 @@ function ProductionApp() {
   }, [inbox, activeConsolidation]);
 
   const openConsolidation = (
-    order: ProductionInboxOrder, planId: number | null,
+    order: ProductionDeliveryGroup, planId: number | null,
     opener: HTMLButtonElement,
   ) => {
     consolidationOpenerRef.current = opener;
@@ -146,7 +156,7 @@ function ProductionApp() {
       // Only refresh after closing. The underlying list never navigates away;
       // after refresh, focus the new Lihat Rencana button (or selected tab).
       pendingPlanFocusRef.current = {
-        orderId: activeConsolidation?.order.order_id ?? 0,
+        scopeKey: activeConsolidation ? deliveryScopeKey(activeConsolidation.order) : "",
         previousInbox: inbox,
       };
     }
@@ -223,8 +233,8 @@ function ProductionApp() {
           <div className="page-heading">
             <div>
               <div className="eyebrow">ADMIN PRODUKSI</div>
-              <h1>Antrean Pesanan Produksi</h1>
-              <p>Semua pesanan Kirim dan Proses Produksi dari seluruh toko, tanggal, dapur, dan jadwal.</p>
+              <h1>Antrean Produksi per Tanggal Kirim</h1>
+              <p>Satu kelompok per tanggal kirim, dapur, dan jadwal kirim; pesanan toko tetap bisa ditelusuri di dalamnya.</p>
             </div>
             <span className="production-readonly">Belum membuat MO Odoo</span>
           </div>
@@ -245,8 +255,8 @@ function ProductionApp() {
               <section className="card order-card">
                 <div className="order-title-bar">
                   <div>
-                    <div className="section-heading"><span className="step-number">01</span> Daftar Pesanan</div>
-                    <p>Prioritas pesanan Kirim lebih dahulu. Semua tanggal tercakup.</p>
+                    <div className="section-heading"><span className="step-number">01</span> Kelompok Tanggal Kirim</div>
+                    <p>Diurutkan berdasarkan tanggal kirim. Setiap dapur dan jadwal tetap kelompok terpisah; jumlah di tab menghitung kelompok.</p>
                   </div>
                   <button type="button" className="btn btn-secondary" onClick={() => setRefresh((v) => v + 1)} disabled={loading}>Muat Ulang</button>
                 </div>
@@ -255,39 +265,84 @@ function ProductionApp() {
                   <>
                     <div className="table-scroll">
                       <table className="production-inbox-table">
-                        <thead><tr><th>ID / Toko</th><th>Tanggal Kirim</th><th>Dapur</th><th>Jadwal</th><th>SKU / Total Qty</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <thead><tr><th>Tanggal Kirim</th><th>Dapur / Jadwal</th><th>Pesanan Toko</th><th>SKU / Qty Gabungan</th><th>Status</th><th>Aksi</th></tr></thead>
                         <tbody>
-                          {inbox.items.map((order) => (
-                            <tr key={order.order_id} data-production-order-id={order.order_id}>
-                              <td><strong>{order.store_name}</strong><small>Order #{order.order_id} · {order.store_code}</small></td>
-                              <td>{order.delivery_date}</td>
-                              <td>{order.kitchen_name}</td>
-                              <td>{order.schedule_name}</td>
-                              <td><strong>{order.sku_count} SKU</strong><small className={order.qty_invalid ? "production-qty-warning" : undefined}>{productionQtyLabel(order.qty_total, order.qty_uom, order.qty_by_uom, order.qty_invalid)}</small></td>
-                              <td><span className={"production-state " + order.status.toLowerCase()}>{order.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</span></td>
-                              <td className="production-inbox-actions">
-                                <button type="button" className="production-open-rekap" onClick={(event) => openRecap(order, event.currentTarget)}>Lihat rekap</button>
-                                {order.status === "KIRIM" && (
-                                  <button type="button" className="production-open-rekap production-plan-trigger"
-                                    onClick={(event) => openConsolidation(order, null, event.currentTarget)}>
-                                    {order.has_consolidation_draft ? "Lanjutkan Draft" : "Rencanakan"}
-                                  </button>
-                                )}
-                                {order.status === "PROSES_PRODUKSI" && order.plan_id != null && (
-                                  <button type="button" className="production-open-rekap production-plan-trigger"
-                                    onClick={(event) => openConsolidation(order, order.plan_id, event.currentTarget)}>
-                                    Lihat rencana
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
+                          {inbox.items.map((group, index) => (
+                            <Fragment key={deliveryScopeKey(group)}>
+                              {(index === 0 || inbox.items[index - 1].delivery_date !== group.delivery_date) && (
+                                <tr className="production-delivery-date-row">
+                                  <th colSpan={6} scope="rowgroup">
+                                    <span className="production-delivery-date-icon" aria-hidden="true">▦</span>
+                                    Tanggal Kirim — {deliveryDateLabel(group.delivery_date)}
+                                  </th>
+                                </tr>
+                              )}
+                              <tr data-delivery-scope={deliveryScopeKey(group)}>
+                                <td>
+                                  <strong>{group.delivery_date}</strong>
+                                  <small>{group.order_count} pesanan final</small>
+                                </td>
+                                <td>
+                                  <strong>{group.kitchen_name}</strong>
+                                  <small>{group.kitchen_code} · Jadwal Kirim {group.schedule_name}</small>
+                                </td>
+                                <td>
+                                  <strong>{group.store_count} toko</strong>
+                                  <details className="production-queue-stores">
+                                    <summary>Lihat toko ({group.store_count})</summary>
+                                    <ul>
+                                      {group.stores.map((store) => (
+                                        <li key={store.order_id}>
+                                          <span>{store.store_name} · {store.store_code} · #{store.order_id}</span>
+                                          <small>{store.status === "KIRIM" ? "Kirim" : "Proses Produksi"}</small>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                </td>
+                                <td>
+                                  <strong>{group.sku_count} SKU unik</strong>
+                                  <small className={group.qty_invalid ? "production-qty-warning" : undefined}>
+                                    {productionQtyLabel(group.qty_total, group.qty_uom, group.qty_by_uom, group.qty_invalid)}
+                                  </small>
+                                </td>
+                                <td>
+                                  <span className={"production-state " + group.status.toLowerCase()}>
+                                    {group.status === "KIRIM" ? "Kirim" :
+                                      group.status === "PROSES_PRODUKSI" ? "Proses Produksi" : "Pesanan Susulan"}
+                                  </span>
+                                  {group.status === "CAMPURAN" && (
+                                    <small className="production-queue-warning">
+                                      {group.kirim_count} Kirim · {group.proses_produksi_count} sudah diproses.
+                                      Perlu penanganan pesanan susulan; jangan konsolidasi ulang.
+                                    </small>
+                                  )}
+                                </td>
+                                <td className="production-inbox-actions">
+                                  <button type="button" className="production-open-rekap"
+                                    onClick={(event) => openRecap(group, event.currentTarget)}>Lihat rekap</button>
+                                  {group.status === "KIRIM" && group.plan_id == null && (
+                                    <button type="button" className="production-open-rekap production-plan-trigger"
+                                      onClick={(event) => openConsolidation(group, null, event.currentTarget)}>
+                                      {group.has_consolidation_draft ? "Lanjutkan Draft" : "Rencanakan"}
+                                    </button>
+                                  )}
+                                  {group.plan_id != null && (
+                                    <button type="button" className="production-open-rekap production-plan-trigger"
+                                      onClick={(event) => openConsolidation(group, group.plan_id, event.currentTarget)}>
+                                      Lihat rencana
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            </Fragment>
                           ))}
-                          {!inbox.items.length && <tr><td colSpan={7} className="production-inbox-empty">Belum ada pesanan untuk status ini.</td></tr>}
+                          {!inbox.items.length && <tr><td colSpan={6} className="production-inbox-empty">Belum ada kelompok pengiriman untuk status ini.</td></tr>}
                         </tbody>
                       </table>
                     </div>
                     <div className="production-inbox-footer">
-                      <span className="result-count">{inbox.total} pesanan · Halaman {page} · {inbox.page_size} per halaman</span>
+                      <span className="result-count">{inbox.total} kelompok pengiriman · Halaman {page} · {inbox.page_size} kelompok per halaman</span>
                       <div className="action-buttons">
                         <button className="btn btn-secondary" type="button" disabled={page === 1} onClick={() => setPage((v) => Math.max(1, v - 1))}>Sebelumnya</button>
                         <button className="btn btn-secondary" type="button" disabled={!inbox.has_more} onClick={() => setPage((v) => v + 1)}>Berikutnya</button>
@@ -305,7 +360,7 @@ function ProductionApp() {
                   onClose={closeRecap}
                 />
               )}
-              <p className="production-note">Rencanakan Produksi membuka pop-up: gunakan Simpan Draft untuk melanjutkan nanti tanpa mengubah status KIRIM, atau Simpan Konsolidasi untuk finalisasi. Lihat Rekap tetap baca-saja. Belum membuat MO Odoo.</p>
+              <p className="production-note">Satu baris adalah satu kelompok tanggal kirim × dapur × jadwal kirim; rincian toko berada di Lihat toko atau Lihat rekap. Simpan Draft tidak mengubah KIRIM; Simpan Konsolidasi memfinalisasi kebutuhan kelompok tersebut. Belum membuat MO Odoo.</p>
             </>
           )}
           {activeConsolidation && (
