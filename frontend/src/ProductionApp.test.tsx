@@ -4,6 +4,7 @@ import ProductionApp from "./ProductionApp";
 import {
   initializeSession, loadProductionDemand, loadProductionInbox,
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
+  loadProductionDraft, saveProductionDraft,
   type ProductionDemand, type ProductionInbox, type SessionInfo,
 } from "./api";
 
@@ -14,6 +15,8 @@ vi.mock("./api", () => ({
   loadConsolidationPreview: vi.fn(),
   loadConsolidationDetail: vi.fn(),
   saveConsolidation: vi.fn(),
+  loadProductionDraft: vi.fn(),
+  saveProductionDraft: vi.fn(),
   logout: vi.fn(),
 }));
 vi.mock("./App", () => ({ LoginPage: () => null }));
@@ -106,6 +109,12 @@ beforeEach(() => {
       ],
     }],
   }));
+  vi.mocked(loadProductionDraft).mockResolvedValue({ draft: null });
+  vi.mocked(saveProductionDraft).mockResolvedValue({
+    draft: { id: 12, version: 1, production_date: null,
+      production_schedule_code: null, order_ids: [1, 2], items: [],
+      updated_at: "2026-11-08T10:00:00+07:00", updated_by: "admin_produksi" },
+  });
   vi.mocked(loadConsolidationDetail).mockResolvedValue({
     plan_id: 7, status: "DRAFT",
     kitchen: { code: "JP", name: "Dapur JP" },
