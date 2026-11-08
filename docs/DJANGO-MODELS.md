@@ -94,3 +94,7 @@ Jangan membangun generic workflow, approval flow, full event sourcing, inventory
 
 ## Pengelolaan kapasitas dari form ProductionAssignment (2026-11-06)
 `ProductionAssignment(product OneToOne, kitchen)` menyatakan satu SKU ditugaskan ke satu dapur. `ProductCapacity(product, schedule, max_qty)` menyatakan kapasitas untuk setiap jadwal produksi, jadi tetap satu tabel relasional terpisah; namun **diisi dari form Admin/Excel template penugasan SKU yang sama**. Kolom Excel `KAPASITAS_<KODE_JADWAL>`; nilai Qty integer, kosong mempertahankan nilai sebelumnya/belum diatur. Simpan assignment, kapasitas dan audit atomik. Tidak perlu migrasi. Jika multi-dapur per SKU nantinya diperlukan, key kapasitas harus mencakup dapur.
+
+
+## ProductionConsolidationDraft — work-in-progress terpisah (8 November 2026)
+Model `ProductionConsolidationDraft` (migration 0005) memegang **satu draft per scope pengiriman dapur × tanggal kirim × jadwal kirim**. Berisi `production_date` nullable, `production_schedule` nullable, `planned_items` JSON Qty integer parsial, `source_order_ids`, `version` optimistic locking, `updated_by` dan timestamps. Ini **bukan** `ProductionPlan` dan tidak boleh mengubah status StoreOrder atau mereservasi kapasitas. Endpoint GET/POST dilindungi grup PRODUCTION/ADMIN; POST menggunakan transaction.atomic, row locks, serta AuditLog SAVE_DRAFT. Saat konsolidasi final berhasil, objek Draft dihapus dalam transaksi rencana yang sama. Tidak ada MO/Odoo write.
