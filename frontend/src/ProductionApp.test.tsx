@@ -355,3 +355,57 @@ describe("Admin Produksi planning modal", () => {
     expect(screen.getByRole("button", { name: "Semua (2)" }).className).toContain("selected");
   });
 });
+
+
+describe("Antrean produksi dan draft yang dapat dilanjutkan", () => {
+  it("shows Lanjutkan Draft after save, keeps orders KIRIM and restores the modal without route changes", async () => {
+    const changedInbox: ProductionInbox = {
+      ...inbox,
+      items: inbox.items.map((row) => ({
+        ...row, has_consolidation_draft: true,
+      })),
+    };
+    vi.mocked(loadProductionInbox)
+      .mockResolvedValueOnce(inbox)
+      .mockResolvedValue(changedInbox);
+    vi.mocked(loadProductionDraft)
+      .mockResolvedValueOnce({ draft: null })
+      .mockResolvedValue({
+        draft: {
+          id: 12, version: 1,
+          production_date: null,
+          production_schedule_code: null,
+          order_ids: [1, 2],
+          items: [{ product_id: 10, qty_planned: "250" }],
+          updated_at: "2026-11-08T10:00:00+07:00",
+          updated_by: "admin",
+        },
+      });
+    render(<ProductionApp />);
+    const trigger = (await screen.findAllByRole("button", {
+      name: "Rencanakan",
+    }))[0];
+    fireEvent.click(trigger);
+    const draftButton = await screen.findByRole("button", { name: "Simpan Draft" });
+    await waitFor(() => expect((draftButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
+      target: { value: "250" },
+    });
+    fireEvent.click(draftButton);
+    await waitFor(() => expect(saveProductionDraft).toHaveBeenCalledOnce());
+    expect(saveConsolidation).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Batal / Tutup" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(loadProductionInbox).toHaveBeenCalledTimes(2));
+    const resume = await screen.findAllByRole("button", { name: "Lanjutkan Draft" });
+    expect(resume).toHaveLength(2);
+    expect(screen.getAllByText("Kirim").length).toBeGreaterThan(0);
+    await waitFor(() => expect(document.activeElement).toBe(resume[0]));
+    fireEvent.click(resume[1]);
+    await waitFor(() => expect(
+      (screen.getByRole("textbox", { name: "Qty Produksi 10005" }) as HTMLInputElement).value
+    ).toBe("250"));
+    expect(screen.getByText("Antrean Pesanan Produksi")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Semua (2)" }).className).toContain("selected");
+  });
+});
