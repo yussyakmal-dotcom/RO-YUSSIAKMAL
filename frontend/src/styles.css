@@ -493,3 +493,42 @@ code { font-size: inherit; }
 .font-size-control button:hover:not(:disabled) { background: #dbeefa; }
 .login-font-controls { position: absolute; top: 16px; right: 16px; }
 .login-shell { position: relative; padding-top: 100px; }
+
+/* Production queue: date-first scopes, with store orders as drilldown only. */
+.production-delivery-date-row th {
+  padding: 11px 16px;
+  background: #eaf3f9;
+  color: #274b64;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  border-top: 1px solid #d7e5ef;
+  border-bottom: 1px solid #d7e5ef;
+}
+.production-delivery-date-icon { margin-right: 7px; }
+.production-queue-stores { margin-top: 7px; max-width: 360px; }
+.production-queue-stores > summary {
+  color: #126391; font-weight: 700; cursor: pointer;
+  font-size: 11px; white-space: nowrap;
+}
+.production-queue-stores > summary:focus-visible {
+  outline: 2px solid #2487b5; outline-offset: 3px; border-radius: 2px;
+}
+.production-queue-stores ul {
+  margin: 9px 0 4px; padding: 0; list-style: none;
+  min-width: 210px; max-height: 220px; overflow-y: auto;
+}
+.production-queue-stores li {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 8px; padding: 7px 0; border-bottom: 1px solid #e7eef5;
+  font-size: 11px; color: #36526b;
+}
+.production-queue-stores li > span { overflow-wrap: anywhere; }
+.production-queue-stores li > small { white-space: nowrap; }
+.production-queue-warning {
+  display: block; max-width: 205px; margin-top: 6px;
+  color: #a04d18; font-size: 11px; line-height: 1.55; font-weight: 600;
+}
+.production-state.campuran { background: #fff0d9; color: #955019; }
+.production-inbox-table td { vertical-align: top; }
+.production-inbox-table td > small { display: block; margin-top: 5px; }
