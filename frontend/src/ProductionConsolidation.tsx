@@ -9,7 +9,7 @@ import {
 import { formatProductionQty } from "./productionQty";
 
 type Props = {
-  order: ProductionScope;
+  order: ProductionScope & { status?: string; plan_id?: number | null };
   planId: number | null;
   schedules: NamedOption[];
   onBack: () => void;
