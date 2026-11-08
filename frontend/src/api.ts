@@ -374,7 +374,7 @@ export function loadProductionDraft(
 ): Promise<{ draft: ProductionConsolidationDraft | null }> {
   return apiRequest(
     "/api/v1/production/consolidation/draft/?" +
-      new URLSearchParams(scope).toString(),
+      new URLSearchParams({ ...scope }).toString(),
     { signal },
   );
 }
