@@ -180,3 +180,13 @@ Pada `/produksi/` → **Rencanakan**, operator kini mempunyai **Simpan Draft** s
 **Simpan Konsolidasi** tetap membutuhkan seluruh tanggal/jadwal/Qty valid, memeriksa kapasitas **terbaru** dan pesanan sumber, lalu membuat rencana+audit+status secara atomik. Draft akan dihapus dalam transaksi final yang berhasil; kegagalan finalisasi mempertahankan draft untuk diperbaiki.
 
 Endpoint: `GET/POST /api/v1/production/consolidation/draft/` (PRODUCTION/ADMIN). **Migration `0005_production_consolidation_draft` diperlukan.** Setelah backup database dan deploy versi yang sudah di-merge, jalankan `docker compose exec api python manage.py migrate --noinput`. Lihat [Workspace Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
+
+
+## Antrean Admin Produksi sekarang berdasarkan tanggal kirim, bukan per toko
+Workspace `/produksi/` menampilkan antrean **satu kelompok per tanggal kirim × dapur × jadwal kirim**, diurutkan berdasarkan tanggal kirim paling awal. Kelompok yang sama dapat memuat banyak toko; daftar utama memperlihatkan jumlah toko, pesanan final, SKU unik, serta Qty gabungan **berdasarkan UoM asli** (tidak menjumlahkan Kg dan gram/pcs menjadi satu angka). Nama toko dan Order ID dapat dibuka lewat **Lihat toko** tanpa membuat satu baris utama per toko.
+
+Filter Semua/Kirim/Proses Produksi dan pagination 50 sekarang menghitung **kelompok pengiriman**, bukan pesanan toko. Lihat Rekap, Rencanakan, Lanjutkan Draft, dan Lihat Rencana tetap pop-up, tetapi semuanya dibuka dari lingkup kelompok yang tepat. Draft tetap tersimpan per lingkup kirim yang sama dan status pesanan KIRIM tidak berubah sampai finalisasi.
+
+**Pengamanan pesanan susulan:** Bila satu kelompok mengandung KIRIM dan PROSES_PRODUKSI, status kelompok **Pesanan Susulan** ditampilkan. Rencana lama boleh dilihat; **tidak tersedia tombol membuat konsolidasi kedua** karena V1 belum memiliki kebijakan rekonsiliasi/alokasi pesanan terlambat. Dibutuhkan keputusan bisnis terpisah.
+
+API baru: `GET /api/v1/production/delivery-queue/?status=ALL&page=1`. Endpoint lama `/api/v1/production/orders/` (per toko) tetap tersedia untuk kompatibilitas. Tidak ada migrasi DB baru, tidak menulis Odoo, tidak mengubah Qty/kapasitas/status. Panduan: [Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).
