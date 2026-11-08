@@ -142,6 +142,7 @@ function ProductionApp() {
     const wasSaved = consolidationSavedRef.current;
     consolidationSavedRef.current = false;
     if (wasSaved) {
+      // Both finalization and Simpan Draft refresh the action label on close.
       // Only refresh after closing. The underlying list never navigates away;
       // after refresh, focus the new Lihat Rencana button (or selected tab).
       pendingPlanFocusRef.current = {
@@ -213,7 +214,7 @@ function ProductionApp() {
             <strong>Status untuk produksi</strong>
             <p><b>Kirim</b>: siap dikonsolidasi.</p>
             <p><b>Proses Produksi</b>: sudah masuk konsolidasi.</p>
-            <p>Draft dan No Order tidak masuk antrean produksi.</p>
+            <p>Draft pesanan toko dan No Order tidak masuk antrean. Draft Rencana Produksi tetap terlihat sebagai pesanan KIRIM.</p>
           </div>
           <div className="sidebar-bottom">RO Middleware · V1</div>
         </aside>
@@ -269,7 +270,7 @@ function ProductionApp() {
                                 {order.status === "KIRIM" && (
                                   <button type="button" className="production-open-rekap production-plan-trigger"
                                     onClick={(event) => openConsolidation(order, null, event.currentTarget)}>
-                                    Rencanakan
+                                    {order.has_consolidation_draft ? "Lanjutkan Draft" : "Rencanakan"}
                                   </button>
                                 )}
                                 {order.status === "PROSES_PRODUKSI" && order.plan_id != null && (
@@ -304,7 +305,7 @@ function ProductionApp() {
                   onClose={closeRecap}
                 />
               )}
-              <p className="production-note">Lihat Rekap tetap baca-saja. Rencanakan Produksi membuka pop-up tersendiri; daftar tetap terlihat di belakang dan hanya berubah setelah konsolidasi berhasil disimpan. Belum membuat MO Odoo.</p>
+              <p className="production-note">Rencanakan Produksi membuka pop-up: gunakan Simpan Draft untuk melanjutkan nanti tanpa mengubah status KIRIM, atau Simpan Konsolidasi untuk finalisasi. Lihat Rekap tetap baca-saja. Belum membuat MO Odoo.</p>
             </>
           )}
           {activeConsolidation && (
@@ -314,6 +315,7 @@ function ProductionApp() {
               schedules={session.schedules}
               onBack={closeConsolidation}
               onSaved={() => { consolidationSavedRef.current = true; }}
+              onDraftSaved={() => { consolidationSavedRef.current = true; }}
             />
           )}
         </main>
