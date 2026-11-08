@@ -4,6 +4,7 @@ import {
   type OrderContext, type OrderItem, type SessionInfo, type StoreOrder,
 } from "./api";
 import { deliveryDateInWib, hasPositiveQty, normalizeQty } from "./utils";
+import FontSizeControl from "./FontSizeControl";
 
 type Busy = "save" | "send" | null;
 
@@ -95,6 +96,7 @@ export function LoginPage({ onSuccess }: { onSuccess: (value: SessionInfo) => vo
 
   return (
     <main className="login-shell">
+      <div className="login-font-controls"><FontSizeControl /></div>
       <div className="login-card">
         <div className="brand-line">
           <span className="brand-symbol">RO</span>
@@ -198,8 +200,8 @@ function App() {
   }, [session, storeCode, kitchenCode, scheduleCode, deliveryDate]);
 
   useEffect(() => {
+    if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
-      if (!dirty) return;
       event.preventDefault();
       event.returnValue = "";
     };
@@ -363,6 +365,7 @@ function App() {
           <span className="user-initial">{session.user.full_name.slice(0, 1).toUpperCase()}</span>
           <span className="user-name">{session.user.full_name}</span>
           <button className="ghost-btn logout" onClick={signOut} title="Keluar dari aplikasi">Keluar</button>
+          <FontSizeControl />
         </div>
       </header>
       <div className="shell-body">

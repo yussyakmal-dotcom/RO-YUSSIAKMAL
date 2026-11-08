@@ -28,9 +28,7 @@ function shortage(requested: string, planned: string): string | null {
 function isValidPlan(item: ConsolidationItem, input: string): boolean {
   if (!/^\d+$/.test(input) || !item.capacity_available) return false;
   const n = BigInt(input);
-  return n > 0n &&
-    n <= BigInt(item.qty_requested) &&
-    n <= BigInt(item.capacity_available);
+  return n > 0n && n <= BigInt(item.capacity_available);
 }
 
 /** Native modal: keep the inbox mounted, keyboard focus inside, and scroll in the popup. */
@@ -43,6 +41,7 @@ export default function ProductionConsolidation({
   const [detail, setDetail] = useState<ConsolidationDetail | null>(null);
   const [savedPlanId, setSavedPlanId] = useState<number | null>(planId);
   const [planned, setPlanned] = useState<Record<number, string>>({});
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -163,6 +162,11 @@ export default function ProductionConsolidation({
   const rows: (ConsolidationItem & {
     qty_planned?: string; qty_shortfall?: string;
   })[] = viewing ? (detail?.items || []) : (preview?.items || []);
+  const searchTerm = search.trim().toLocaleLowerCase("id-ID");
+  const visibleRows = rows.filter((item) =>
+    item.sku.toLocaleLowerCase("id-ID").includes(searchTerm) ||
+    item.name.toLocaleLowerCase("id-ID").includes(searchTerm)
+  );
   const activeSchedules = viewing ? [] : (preview?.production_schedules || schedules);
   const shortfallCount = viewing
     ? detail?.shortfall_sku_count
@@ -248,24 +252,46 @@ export default function ProductionConsolidation({
         <section className="card production-plan-card">
           <div className="order-title-bar">
             <div>
-              <div className="section-heading">Qty Pesan, Kapasitas & Qty Produksi</div>
-              <p>{rows.length} SKU · {viewing ? "Histori rencana tersimpan" : "Qty Produksi harus diisi manual per SKU"}</p>
+              <div className="section-heading">Qty Pesan, Resep BoM & Qty Produksi</div>
+              <p>{rows.length} SKU · {viewing ? "Histori rencana tersimpan" : "Qty Produksi ditentukan manual oleh Admin Produksi"}</p>
             </div>
             {!!shortfallCount && <span className="production-plan-alert">
               {shortfallCount} SKU memiliki kekurangan
             </span>}
           </div>
+          <div className="filters-row">
+            <label className="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                aria-label="Cari SKU atau nama produk"
+                placeholder="Cari SKU atau nama produk…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            {search && (
+              <button type="button" className="ghost-btn" onClick={() => setSearch("")}>
+                Hapus pencarian
+              </button>
+            )}
+            <span className="result-count" role="status">
+              {visibleRows.length} dari {rows.length} SKU ditampilkan
+            </span>
+          </div>
           <div className="table-scroll">
             <table className="production-plan-table">
               <thead><tr>
-                <th>SKU / Nama</th><th>Qty Pesan</th><th>Kapasitas</th>
-                <th>Terpakai</th><th>Tersisa</th><th>Qty Produksi</th><th>Kekurangan</th>
+                <th>SKU / Nama</th><th>Qty Pesan</th><th>Hasil 1 Resep BoM</th><th>Kapasitas</th>
+                <th>Terpakai</th><th>Tersisa</th><th>Qty Produksi</th>
+                <th>Kekurangan</th><th>Kelebihan Produksi</th>
               </tr></thead>
               <tbody>
-                {rows.map((item) => {
+                {visibleRows.map((item) => {
                   const value = viewing ? item.qty_planned || "" : planned[item.product_id] || "";
                   const gap = viewing ? (item.qty_shortfall || "0") :
                     shortage(item.qty_requested, value);
+                  const surplus = shortage(value, item.qty_requested);
                   const overCapacity = !!item.capacity_available &&
                     BigInt(item.qty_requested) > BigInt(item.capacity_available);
                   const invalid = !viewing && value !== "" && !isValidPlan(item, value);
@@ -273,6 +299,7 @@ export default function ProductionConsolidation({
                     <tr key={item.product_id}>
                       <td><strong>{item.sku || "—"}</strong><small>{item.name}</small></td>
                       <td><strong>{qty(item.qty_requested, item.uom)}</strong></td>
+                      <td>{item.bom_output_qty === null ? "Belum tersedia" : qty(item.bom_output_qty, item.uom)}</td>
                       <td>{qty(item.capacity_qty, item.uom)}</td>
                       <td>{item.capacity_used === null ? "—" : qty(item.capacity_used, item.uom)}</td>
                       <td className={overCapacity ? "production-plan-alert" : ""}>
@@ -305,9 +332,15 @@ export default function ProductionConsolidation({
                         {gap === null ? "—" : qty(gap, item.uom)}
                         {invalid && <small>Periksa Qty / kapasitas</small>}
                       </td>
+                      <td>{surplus === null ? "—" : qty(surplus, item.uom)}</td>
                     </tr>
                   );
                 })}
+                {visibleRows.length === 0 && (
+                  <tr><td colSpan={9} className="empty-table">
+                    Tidak ada SKU atau nama produk yang cocok dengan pencarian.
+                  </td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -315,10 +348,11 @@ export default function ProductionConsolidation({
             <p className="production-plan-scope-note">{detail?.note}</p>
           ) : (
             <p className="production-plan-scope-note">
-              Qty Produksi wajib bilangan bulat positif, maksimal Qty Pesan dan
-              kapasitas tersedia. Bila kapasitas belum diatur, periksa master sebelum menyimpan.
-              Kekurangan dihitung dari Qty Pesan dikurangi Qty Produksi; tidak mengubah pesanan toko.
-              Angka MO/BoM belum dihitung pada tahap ini.
+              Hasil 1 Resep BoM adalah informasi untuk Admin Produksi.
+              Qty Produksi diisi manual, boleh melebihi Qty Pesan, maksimal kapasitas tersisa.
+              Sistem tidak menentukan jumlah resep atau membulatkan Qty.
+              Kelebihan Produksi belum dialokasikan ke toko atau WIP.
+              Pesanan toko tetap utuh; belum membuat MO Odoo.
             </p>
           )}
         </section>

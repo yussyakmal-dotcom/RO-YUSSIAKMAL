@@ -33,6 +33,7 @@ class ConsolidationTests(TestCase):
         )
         self.produk = Product.objects.create(
             odoo_id=301, sku="10005", name="Arem-arem Sultan Mini", uom="Pcs",
+            bom_odoo_id=901, bom_output_qty=100,
         )
         self.produk2 = Product.objects.create(
             odoo_id=302, sku="10006", name="Lemper", uom="Pcs",
@@ -102,6 +103,7 @@ class ConsolidationTests(TestCase):
         self.assertIsNone(no_date["production_schedule"])
         self.assertEqual(no_date["order_ids"], [self.a.pk, self.b.pk])
         self.assertEqual(no_date["items"][0]["qty_requested"], "500")
+        self.assertEqual(no_date["items"][0]["bom_output_qty"], "100")
         self.assertIsNone(no_date["items"][0]["capacity_qty"])
         self.assertFalse(ProductionPlan.objects.exists())
         scoped = self.preview(
@@ -167,6 +169,47 @@ class ConsolidationTests(TestCase):
         self.assertEqual({o["status"] for o in inbox["items"]}, {
             "PROSES_PRODUKSI",
         })
+
+    def test_recipe_is_information_only_and_manual_150_is_not_rounded(self):
+        self.a.lines.update(qty=75)
+        self.b.lines.update(qty=75)
+        self.cap.max_qty = 300
+        self.cap.save()
+        self.client.force_login(self.production)
+        result = self.save({**self.payload, "items": [{"product_id": self.produk.pk, "qty_planned": "150"}]})
+        self.assertEqual(result.status_code, 201, result.content)
+        line = ProductionPlanLine.objects.get()
+        self.assertEqual(line.qty_planned, 150)
+        self.assertIsNone(line.qty_mo)
+        self.assertIsNone(line.batch_qty)
+        detail = self.client.get(reverse("production-consolidation-detail", args=[line.plan_id])).json()
+        self.assertEqual(detail["items"][0]["bom_output_qty"], "100")
+        self.assertEqual(detail["items"][0]["qty_planned"], "150")
+        self.assertIsNone(detail["items"][0]["qty_mo"])
+
+    def test_admin_can_manually_plan_300_for_demand_150(self):
+        self.a.lines.update(qty=75)
+        self.b.lines.update(qty=75)
+        self.cap.max_qty = 300
+        self.cap.save()
+        self.client.force_login(self.production)
+        result = self.save({**self.payload, "items": [{"product_id": self.produk.pk, "qty_planned": "300"}]})
+        self.assertEqual(result.status_code, 201, result.content)
+        line = ProductionPlanLine.objects.get()
+        self.assertEqual((line.qty_requested, line.qty_planned, line.qty_shortfall), (150, 300, 0))
+        self.assertIsNone(line.qty_mo)
+        self.assertEqual(self.a.lines.get().qty, 75)
+        self.assertEqual(self.b.lines.get().qty, 75)
+        audit = AuditLog.objects.get(action="CONSOLIDATE").changes["items"][0]
+        self.assertEqual(audit["qty_shortfall"], "0")
+
+    def test_missing_recipe_does_not_block_manual_planning(self):
+        self.produk.bom_output_qty = None
+        self.produk.save()
+        self.client.force_login(self.production)
+        self.assertIsNone(self.preview().json()["items"][0]["bom_output_qty"])
+        self.assertEqual(self.save().status_code, 201)
+        self.assertEqual(ProductionPlanLine.objects.get().qty_planned, 400)
 
     def test_double_submit_different_production_date_cannot_duplicate(self):
         self.client.force_login(self.production)

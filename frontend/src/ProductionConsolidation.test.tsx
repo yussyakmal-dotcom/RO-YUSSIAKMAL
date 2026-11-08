@@ -40,7 +40,7 @@ const preview: ConsolidationPreview = {
   ],
   items: [{
     product_id: 5, sku: "10005", name: "Arem-arem Sultan Mini",
-    uom: "Pcs", qty_requested: "500",
+    uom: "Pcs", qty_requested: "500", bom_output_qty: "100",
     capacity_qty: null, capacity_used: null, capacity_available: null,
     sources: [
       { order_id: 1, store_code: "T_BAN", store_name: "Bandara", qty: "250" },
@@ -101,6 +101,98 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); document.body.style.overflow = ""; });
 
 describe("Konsolidasi Produksi V1", () => {
+  it("only informs the recipe output and saves the operator's quantity without rounding or choosing recipes", async () => {
+    vi.mocked(loadConsolidationPreview).mockImplementation(async (scope) => ({
+      ...preview, production_date: scope.production_date || null,
+      production_schedule: scope.production_schedule_code ? schedules[1] : null,
+      items: [{ ...preview.items[0], qty_requested: "150", bom_output_qty: "100",
+        capacity_qty: "300", capacity_used: "0", capacity_available: "300" }],
+    }));
+    render(<ProductionConsolidation order={order} planId={null} schedules={schedules}
+      onBack={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Tanggal Produksi (manual)"), { target: { value: "2026-11-06" } });
+    await screen.findByRole("option", { name: "Pagi" });
+    fireEvent.change(screen.getByLabelText("Jadwal Produksi"), { target: { value: "PAGI" } });
+    const input = await screen.findByRole("textbox", { name: "Qty Produksi 10005" });
+    const save = screen.getByRole("button", { name: "Simpan Konsolidasi" });
+    expect(screen.getByRole("columnheader", { name: "Hasil 1 Resep BoM" })).toBeTruthy();
+    expect(screen.getByText("100 Pcs")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "150" } });
+    expect((input as HTMLInputElement).value).toBe("150");
+    expect(screen.queryByText("200 Pcs")).toBeNull();
+    expect(screen.queryByText("2 resep")).toBeNull();
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(input, { target: { value: "300" } });
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(input, { target: { value: "301" } });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input, { target: { value: "150" } });
+    fireEvent.click(save);
+    await waitFor(() => expect(saveConsolidation).toHaveBeenCalledWith(expect.objectContaining({
+      items: [{ product_id: 5, qty_planned: "150" }],
+    })));
+  });
+
+  it("searches SKU or name without losing Qty, bypassing hidden validation, or omitting hidden SKU on save", async () => {
+    vi.mocked(loadConsolidationPreview).mockImplementation(async (scope) => ({
+      ...preview,
+      production_date: scope.production_date || null,
+      production_schedule: scope.production_schedule_code ? schedules[1] : null,
+      items: [preview.items[0], {
+        ...preview.items[0], product_id: 6, sku: "10006", name: "Lemper Ayam",
+      }].map((item) => ({
+        ...item, capacity_qty: "400", capacity_used: "0", capacity_available: "400",
+      })),
+    }));
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={vi.fn()} onSaved={vi.fn()}
+    />);
+    fireEvent.change(screen.getByLabelText("Tanggal Produksi (manual)"), {
+      target: { value: "2026-11-06" },
+    });
+    await screen.findByRole("option", { name: "Pagi" });
+    fireEvent.change(screen.getByLabelText("Jadwal Produksi"), {
+      target: { value: "PAGI" },
+    });
+    await screen.findByRole("textbox", { name: "Qty Produksi 10006" });
+    const search = screen.getByRole("searchbox", { name: "Cari SKU atau nama produk" });
+    const save = screen.getByRole("button", { name: "Simpan Konsolidasi" });
+    const previewCalls = vi.mocked(loadConsolidationPreview).mock.calls.length;
+
+    fireEvent.change(search, { target: { value: "10005" } });
+    expect(screen.queryByText("Lemper Ayam")).toBeNull();
+    expect(screen.getByText("1 dari 2 SKU ditampilkan")).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
+      target: { value: "400" },
+    });
+    // A hidden, unfilled SKU must still prevent saving the entire consolidation.
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(search, { target: { value: "  LEMPER  " } });
+    expect(screen.queryByText("Arem-arem Sultan Mini")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10006" }), {
+      target: { value: "300" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Hapus pencarian" }));
+    expect((screen.getByRole("textbox", { name: "Qty Produksi 10005" }) as HTMLInputElement).value).toBe("400");
+    expect((screen.getByRole("textbox", { name: "Qty Produksi 10006" }) as HTMLInputElement).value).toBe("300");
+
+    fireEvent.change(search, { target: { value: "tidak ditemukan" } });
+    expect(screen.getByText("0 dari 2 SKU ditampilkan")).toBeTruthy();
+    expect(screen.getByText("Tidak ada SKU atau nama produk yang cocok dengan pencarian.")).toBeTruthy();
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    expect(loadConsolidationPreview).toHaveBeenCalledTimes(previewCalls);
+    fireEvent.click(save);
+    await waitFor(() => expect(saveConsolidation).toHaveBeenCalledWith(expect.objectContaining({
+      order_ids: [1, 2],
+      items: [
+        { product_id: 5, qty_planned: "400" },
+        { product_id: 6, qty_planned: "300" },
+      ],
+    })));
+  });
+
   it("opens above the inbox as a native modal, focuses close, and supports Esc", async () => {
     const onBack = vi.fn();
     const previousOverflow = document.body.style.overflow;
@@ -158,7 +250,7 @@ describe("Konsolidasi Produksi V1", () => {
     expect(screen.getByText("500 Pcs")).toBeTruthy();
     const input = screen.getByRole("textbox", { name: "Qty Produksi 10005" });
     fireEvent.change(input, { target: { value: "400" } });
-    await waitFor(() => expect(screen.getByText("100 Pcs")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("row", { name: /Arem-arem Sultan Mini/ }).querySelectorAll("td")[7].textContent).toBe("100 Pcs"));
     expect((saveButton as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(saveButton);
     await waitFor(() => expect(saveConsolidation).toHaveBeenCalledWith({
@@ -170,7 +262,7 @@ describe("Konsolidasi Produksi V1", () => {
     }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.getByText("Rencana Produksi #7")).toBeTruthy());
-    expect(screen.getByText("100 Pcs")).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Arem-arem Sultan Mini/ }).querySelectorAll("td")[7].textContent).toBe("100 Pcs");
     expect(screen.queryByRole("button", { name: "Simpan Konsolidasi" })).toBeNull();
   });
 
@@ -203,7 +295,7 @@ describe("Konsolidasi Produksi V1", () => {
       planId={7} schedules={schedules} onBack={vi.fn()} onSaved={vi.fn()}
     />);
     await waitFor(() => expect(screen.getByText("Rencana Produksi #7")).toBeTruthy());
-    await waitFor(() => expect(screen.getByText("100 Pcs")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("row", { name: /Arem-arem Sultan Mini/ }).querySelectorAll("td")[7].textContent).toBe("100 Pcs"));
     expect(screen.queryByRole("textbox", { name: "Qty Produksi 10005" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Simpan Konsolidasi" })).toBeNull();
     expect(screen.getByText("Subuh")).toBeTruthy();

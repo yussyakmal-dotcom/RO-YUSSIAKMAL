@@ -265,3 +265,10 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **O-027 (❓ ke depan):** Jika SKU dapat diproduksi oleh lebih dari satu dapur, model kapasitas perlu diubah menjadi unik per dapur × SKU × jadwal produksi. Ketika SKU pindah dapur pada V1, kapasitas melekat SKU dan harus dikonfirmasi telah diperiksa.
 
 - **I-061 (✅ konsistensi alur):** Halaman master teknis Product Capacities dijadikan **read-only**. Admin mengedit kapasitas hanya dari Production Assignments atau unggah template Excel dapur, untuk mencegah dua jalur edit yang mengabaikan audit dan validasi integer.
+
+
+## Informasi hasil 1 resep BoM — 2026-11-08
+- **D-069 (✅ pengguna, diperjelas):** Admin Produksi perlu mengetahui berapa hasil **1 resep BoM**. Sistem hanya menginformasikan hasil resep; tidak menentukan jumlah resep atau membulatkan produksi otomatis.
+- **D-070 (✅ pengguna):** Admin Produksi boleh mengisi Qty Produksi 200 atau 300 untuk kebutuhan 150, selama masih dalam kapasitas. Ini menggantikan batas sementara D-065 bahwa Qty Planned tidak boleh melebihi Qty Requested. Qty tetap manual.
+- **I-062 (implementasi):** Preview dan modal menampilkan hasil per resep dari master Odoo. Simpan mempertahankan persis Qty input, tanpa perhitungan batch; Qty MO/batch tetap NULL. Kekurangan/kelebihan dibandingkan dengan Qty manual.
+- **O-028 (❓ terbuka):** Pilihan kelebihan menjadi WIP atau dibagi prorata oleh Admin Packing belum ditetapkan. Tidak ada alokasi, stok, MO/transfer Odoo atau perubahan pesanan toko otomatis.

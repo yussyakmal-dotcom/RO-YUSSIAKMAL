@@ -44,6 +44,11 @@ Login dilakukan di `/toko/`, tidak harus melalui Django Admin. Autentikasi mengg
 
 Ada pencarian SKU/nama, filter `Hanya Qty ≥ 1`, ringkasan jumlah SKU dan Qty, serta peringatan saat berpindah pilihan dengan Draft yang belum tersimpan. SKU nonaktif dari template tidak muncul pada order baru; jika sudah ada dalam Draft sebelum dinonaktifkan, tetap muncul untuk diperiksa dan dikoreksi tanpa kehilangan data.
 
+### Peringatan saat menutup tab atau memuat ulang
+- Jika Qty telah diubah dan belum berhasil disimpan, aplikasi meminta browser menampilkan konfirmasi saat tab ditutup, halaman dimuat ulang, atau pengguna meninggalkan halaman. Pengguna dapat membatalkan untuk melanjutkan pengisian dan menyimpan Draft.
+- Perlindungan tetap aktif selama penyimpanan berlangsung atau bila simpan gagal. Setelah Simpan Draft atau Kirim berhasil, peringatan berhenti; perubahan Qty berikutnya mengaktifkannya kembali.
+- Dialog dan teks konfirmasi mengikuti browser, dan sebagian browser/perangkat tidak selalu menampilkannya. Ini bukan penyimpanan otomatis atau pemulihan offline; tetap gunakan **Simpan Draft** sebelum meninggalkan halaman.
+
 ## Endpoint yang digunakan
 - `GET /api/v1/auth/csrf/` — set cookie CSRF.
 - `POST /api/v1/auth/login/` — login sesi.
@@ -56,6 +61,7 @@ Ada pencarian SKU/nama, filter `Hanya Qty ≥ 1`, ringkasan jumlah SKU dan Qty, 
 Hanya koneksi ke middleware; **tidak ada transaksi write ke Odoo** pada workspace ini.
 
 ## Desain UI
+- Kontrol **Teks − / +** di kanan atas mengubah semua ukuran font sebesar **1 poin per klik**, termasuk tabel dan modal. Pengaturan berlaku bersama untuk Workspace Toko/Produksi dan halaman login, disimpan pada browser yang sama, dengan rentang penyesuaian −2 sampai +10 poin dari ukuran awal.
 - Mengacu estetika SAP Fiori Horizon (light, komponen enterprise, tabel compact), **bukan** SAPUI5 atau menyalin aset SAP.
 - Tabel Qty bergaya spreadsheet dengan header sticky, pencarian SKU/nama, keyboard input; menggunakan `memo` per baris untuk mengurangi render ulang saat mengedit 50–700 SKU.
 - Responsive untuk laptop, desktop, dan perangkat berlayar kecil.

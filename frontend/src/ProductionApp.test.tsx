@@ -96,7 +96,7 @@ beforeEach(() => {
     ],
     items: [{
       product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs",
-      qty_requested: "500",
+      qty_requested: "500", bom_output_qty: "100",
       capacity_qty: scope.production_schedule_code ? "400" : null,
       capacity_used: scope.production_date ? "0" : null,
       capacity_available: scope.production_date && scope.production_schedule_code ? "400" : null,
@@ -119,7 +119,7 @@ beforeEach(() => {
     }],
     items: [{
       product_id: 10, sku: "10005", name: "Risoles Mayo", uom: "pcs",
-      qty_requested: "500", capacity_qty: "400", capacity_used: "0",
+      qty_requested: "500", bom_output_qty: "100", capacity_qty: "400", capacity_used: "0",
       capacity_available: "400", qty_planned: "400", qty_shortfall: "100",
       qty_mo: null,
     }],

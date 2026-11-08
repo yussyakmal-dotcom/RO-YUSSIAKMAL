@@ -269,6 +269,7 @@ export interface ConsolidationItem {
   name: string;
   uom: string;
   qty_requested: string;
+  bom_output_qty: string | null;
   capacity_qty: string | null;
   capacity_used: string | null;
   capacity_available: string | null;

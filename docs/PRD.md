@@ -220,3 +220,12 @@ SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik da
 - Download/Upload Excel template dapur menyertakan kolom `KAPASITAS_<KODE_JADWAL>` dari jadwal produksi aktif; satu preview, validasi (integer, nonnegatif, tidak ada rumus/kolom jadwal tidak aktif), impor atomik + audit.
 - Kapasitas `0` berarti tidak ada kapasitas; sel kosong mempertahankan kapasitas lama atau belum diatur untuk SKU baru. Konsolidasi tidak boleh memperlakukan kosong sebagai tidak terbatas. UoM kapasitas mengikuti master produk Odoo; Qty harus bulat.
 - Model `ProductionAssignment` tetap satu dapur per SKU; kapasitas tetap `ProductCapacity(product,schedule,max_qty)` agar multi-jadwal tetap normalisasi, meskipun form dan impor digabung. Perpindahan SKU dengan kapasitas lama ke dapur baru memerlukan konfirmasi.
+
+
+## Pembaruan 8 November 2026 — Informasi hasil 1 resep BoM
+
+- Kolom **Hasil 1 Resep BoM** menginformasikan output resep dari master Odoo, misalnya **100 Pcs**. Informasi ini tidak menentukan jumlah resep, mengisi Qty, atau membulatkan produksi otomatis.
+- **Qty Produksi** (`qty_planned`) tetap diisi manual oleh Admin Produksi. Untuk kebutuhan 150 dan kapasitas 300, operator boleh memilih 200 atau 300; sistem menyimpan persis angka yang dimasukkan, selama integer positif dan tidak melebihi kapasitas tersisa. Batas sementara Qty Planned ≤ Qty Requested digantikan oleh keputusan ini.
+- Kekurangan = `max(0, requested - planned)`. Kelebihan = `max(0, planned - requested)`, hanya ditampilkan tanpa alokasi otomatis. Pesanan dan jadwal kirim toko tetap utuh.
+- Informasi BoM yang belum tersedia diberi label **Belum tersedia**, tanpa menebak resep atau memblokir penyimpanan manual karena informasi tersebut. `qty_mo` dan `batch_qty` tetap NULL pada rencana baru; tidak ada perhitungan batch atau MO Odoo pada tahap ini.
+- Kelebihan belum otomatis dijadikan WIP atau dibagi prorata. Pengaturan alokasi aktual tetap di tahap Packing; kebijakan WIP/prorata belum diputuskan.

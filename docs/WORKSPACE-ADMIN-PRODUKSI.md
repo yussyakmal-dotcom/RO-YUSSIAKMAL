@@ -12,6 +12,8 @@
 
 ## Tampilan yang digunakan
 
+Kontrol **Teks − / +** di kanan atas mengubah semua ukuran font sebesar **1 poin per klik**, termasuk modal Rekap/Rencanakan/Lihat Rencana. Pilihan tersimpan di browser dan berlaku juga saat membuka Workspace Toko.
+
 Buka `http://localhost:900/produksi/` dan login memakai superuser/ADMIN atau Group `PRODUCTION`.
 
 - **Default Semua:** pesanan status KIRIM dan PROSES PRODUKSI seluruh tanggal/dapur/jadwal. Tidak ada filter tanggal otomatis.
@@ -115,10 +117,12 @@ Lihat [Kontrak Bisnis Konsolidasi Produksi V1](./KONTRAK-KONSOLIDASI-PRODUKSI-V1
 
 1. Buka `/produksi/`; cari pesanan **KIRIM**, lalu klik **Rencanakan** untuk membuka **pop-up/modal di atas antrean** (bukan mengganti halaman atau membuat form di bawah tabel). Semua KIRIM dengan dapur, tanggal kirim dan jadwal kirim sama akan digabung; bukan hanya toko pada baris yang diklik.
 2. Pastikan **tanggal/jadwal kirim** terlihat read-only sesuai toko. Pilih **Tanggal Produksi** manual dan **Jadwal Produksi** pada field terpisah (tidak ada default).
-3. Tinjau **Qty Pesan, Kapasitas master, Terpakai, Tersisa** per SKU/UoM dan isi **Qty Produksi** sebagai bilangan bulat positif. Nilai maksimal Qty Pesan dan kapasitas tersisa.
+3. Tinjau **Qty Pesan, Hasil 1 Resep BoM, Kapasitas master, Terpakai, Tersisa** per SKU/UoM. Isi **Qty Produksi** manual sebagai bilangan bulat positif, maksimal kapasitas tersisa. Angka boleh melebihi Qty Pesan; tidak ada pembulatan otomatis.
 4. Contoh: diminta **500 Pcs**, kapasitas tersedia **400 Pcs**, diisi Qty Produksi **400 Pcs** → tabel menampilkan **Kekurangan 100 Pcs**. **Simpan Konsolidasi tetap boleh**, tanpa mengubah 500 Pcs/jadwal kirim toko.
 5. Jika kapasitas master belum tersedia untuk salah satu SKU, Simpan diblokir dengan keterangan jelas. Perbaiki kapasitas melalui konfigurasi master terlebih dahulu. Jangan mengasumsikan kapasitas kosong berarti tidak terbatas.
 6. Setelah berhasil, semua order sumber menjadi **PROSES_PRODUKSI** dan memiliki aksi **Lihat Rencana**; histori menyimpan detail kebutuhan, produksi, kapasitas, dan kekurangan. **Tidak ada MO Odoo**.
+
+Modal Rencanakan dan Lihat Rencana menyediakan **pencarian SKU atau nama produk**, tanpa membedakan huruf besar/kecil. Jumlah hasil ditampilkan; **Hapus pencarian** menampilkan seluruh SKU kembali. Pencarian hanya menyaring tampilan: Qty yang diisi tetap tersimpan di formulir, validasi tetap memeriksa semua SKU, dan Simpan Konsolidasi tetap menyertakan seluruh SKU dalam lingkup pesanan.
 
 ### API konsolidasi (PRODUCTION/ADMIN, session + CSRF)
 ```http
@@ -167,3 +171,12 @@ Qty kapasitas harus bilangan bulat dalam UoM asli dari Odoo. Kosong tetap **Belu
 Panduan: [Template SKU per Dapur](./TEMPLATE-PEMESANAN.md).
 
 Menu teknis Product Capacities hanya untuk inspeksi; gunakan Production Assignments untuk semua perubahan kapasitas. Hal ini menjaga perubahan kapasitas tetap diaudit bersama perubahan template.
+
+
+## Pembaruan 8 November 2026 — Informasi hasil 1 resep BoM
+
+- Kolom **Hasil 1 Resep BoM** menginformasikan output resep dari master Odoo, misalnya **100 Pcs**. Informasi ini tidak menentukan jumlah resep, mengisi Qty, atau membulatkan produksi otomatis.
+- **Qty Produksi** (`qty_planned`) tetap diisi manual oleh Admin Produksi. Untuk kebutuhan 150 dan kapasitas 300, operator boleh memilih 200 atau 300; sistem menyimpan persis angka yang dimasukkan, selama integer positif dan tidak melebihi kapasitas tersisa. Batas sementara Qty Planned ≤ Qty Requested digantikan oleh keputusan ini.
+- Kekurangan = `max(0, requested - planned)`. Kelebihan = `max(0, planned - requested)`, hanya ditampilkan tanpa alokasi otomatis. Pesanan dan jadwal kirim toko tetap utuh.
+- Informasi BoM yang belum tersedia diberi label **Belum tersedia**, tanpa menebak resep atau memblokir penyimpanan manual karena informasi tersebut. `qty_mo` dan `batch_qty` tetap NULL pada rencana baru; tidak ada perhitungan batch atau MO Odoo pada tahap ini.
+- Kelebihan belum otomatis dijadikan WIP atau dibagi prorata. Pengaturan alokasi aktual tetap di tahap Packing; kebijakan WIP/prorata belum diputuskan.

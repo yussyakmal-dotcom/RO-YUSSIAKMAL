@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ProductionRecapModal from "./ProductionRecapModal";
 import ProductionConsolidation from "./ProductionConsolidation";
 import { productionQtyLabel } from "./productionQty";
+import FontSizeControl from "./FontSizeControl";
 import { LoginPage } from "./App";
 import {
   initializeSession, loadProductionDemand, loadProductionInbox, logout,
@@ -199,6 +200,7 @@ function ProductionApp() {
           <span className="user-initial">{session.user.full_name.slice(0, 1).toUpperCase()}</span>
           <span className="user-name">{session.user.full_name}</span>
           <button type="button" className="ghost-btn logout" onClick={signOut}>Keluar</button>
+          <FontSizeControl />
         </div>
       </header>
       <div className="shell-body">

@@ -21,7 +21,7 @@ from .models import (
     ProductionPlanSource, Schedule, StoreOrder, StoreOrderLine, Warehouse,
 )
 from .production_demand_api import _production_access, _product_uom
-from .store_order_api import WholeNumberQtyField
+from .store_order_api import WholeNumberQtyField, _qty_text
 
 
 class ScopeQuery(serializers.Serializer):
@@ -48,6 +48,13 @@ class SaveConsolidation(ScopeQuery):
 
 class ConsolidationConflict(Exception):
     pass
+
+
+def _recipe_output(product):
+    value = product.bom_output_qty
+    if not product.bom_odoo_id or value is None or value <= 0:
+        return None
+    return _qty_text(value)
 
 
 def _context(params):
@@ -105,6 +112,7 @@ def _demand(orders):
             "name": line.product.name,
             "uom": uom,
             "qty_requested": 0,
+            "bom_output_qty": _recipe_output(line.product),
             "sources": [],
         })
         entry["qty_requested"] += int(q)
@@ -309,10 +317,6 @@ def save_consolidation(request):
                         "Qty Produksi tiap SKU minimal 1 sampai kebijakan "
                         "Qty Produksi 0 ditetapkan."
                     )
-                if planned > Decimal(row["qty_requested"]):
-                    raise ConsolidationConflict(
-                        "Qty Produksi belum boleh melebihi Qty Pesan pada V1."
-                    )
                 if planned > maximum["remaining"]:
                     raise ConsolidationConflict(
                         "Qty Produksi melebihi kapasitas tersedia untuk SKU "
@@ -361,9 +365,9 @@ def save_consolidation(request):
                         "qty_planned": str(int(planned)),
                         "capacity_qty": str(int(cap["max"])),
                         "capacity_used_before": str(int(cap["used"])),
-                        "qty_shortfall": str(int(
-                            Decimal(row["qty_requested"]) - planned
-                        )),
+                        "qty_shortfall": str(int(max(
+                            Decimal("0"), Decimal(row["qty_requested"]) - planned
+                        ))),
                     } for row, planned, cap in checked],
                 },
             )
@@ -438,6 +442,7 @@ def consolidation_detail(request, plan_id):
             )),
             "qty_shortfall": str(int(row.qty_shortfall)),
             "qty_mo": str(row.qty_mo) if row.qty_mo is not None else None,
+            "bom_output_qty": _recipe_output(row.product),
         } for row in rows],
         "shortfall_sku_count": sum(row.qty_shortfall > 0 for row in rows),
         "note": (
