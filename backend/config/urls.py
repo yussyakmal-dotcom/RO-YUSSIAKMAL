@@ -7,6 +7,7 @@ from ro_core.store_order_api import store_order_form, send_store_order
 from ro_core.store_auth import csrf_cookie, session_info, login_session, logout_session
 from ro_core.production_demand_api import production_demand, recent_final_store_orders, production_inbox
 from ro_core.production_consolidation_api import preview_consolidation, save_consolidation, consolidation_detail
+from ro_core.production_consolidation_draft_api import consolidation_draft
 
 def health(_request):
     return JsonResponse({"status": "ok", "service": "ro-middleware"})
@@ -23,6 +24,7 @@ urlpatterns = [
     path("api/v1/production/orders/", production_inbox, name="production-inbox"),
     path("api/v1/production/recent-orders/", recent_final_store_orders, name="production-recent-orders"),
     path("api/v1/production/consolidation/preview/", preview_consolidation, name="production-consolidation-preview"),
+    path("api/v1/production/consolidation/draft/", consolidation_draft, name="production-consolidation-draft"),
     path("api/v1/production/consolidations/", save_consolidation, name="production-consolidation-save"),
     path("api/v1/production/consolidations/<int:plan_id>/", consolidation_detail, name="production-consolidation-detail"),
     path("api/v1/auth/csrf/", csrf_cookie, name="store-session-csrf"),
