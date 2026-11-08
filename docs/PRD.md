@@ -239,3 +239,12 @@ SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik da
 - Draft memakai nomor versi/optimistic locking sehingga dua Admin tidak menimpa edit lain secara diam-diam. Status penyimpan dan waktu simpan terlihat. Modal meminta konfirmasi jika ditutup dengan perubahan yang belum tersimpan.
 - **Simpan Konsolidasi** adalah tindakan terpisah. Server memeriksa kembali source orders berstatus KIRIM, slot, Qty SKU dan kapasitas terkini; baru setelah seluruh transaksi berhasil rencana dibuat, status berubah PROSES_PRODUKSI, dan draft dihapus atomik. Gagal finalisasi tetap mempertahankan draft.
 - Database model baru `ProductionConsolidationDraft` melalui migration 0005; API GET/POST `/api/v1/production/consolidation/draft/`. Pembaruan repository menyertakan tes role, belum lengkap, resume, kehilangan draft, konflik antaroperator, dan finalisasi.
+
+
+## Antrean produksi berorientasi tanggal kirim — 8 November 2026
+- **Keputusan perbaikan UX:** Operasional Admin Produksi berfokus pada **tanggal kirim**, bukan setiap pesanan toko sebagai pekerjaan terpisah. Tampilan utama `/produksi/` wajib mengelompokkan `delivery_date × kitchen × delivery_schedule`, bukan satu baris per `StoreOrder`.
+- Urutan tampilan berdasarkan tanggal kirim, kemudian dapur, kemudian jadwal kirim (sesuai master sort order). Pada tanggal sama, **jadwal/dapur berbeda tidak boleh digabung**: komitmen toko dan cakupan konsolidasi harus tetap terpisah.
+- Setiap kelompok menampilkan jumlah toko, jumlah pesanan final, SKU unik dan Qty per UoM; tidak boleh menambahkan Qty dengan UoM berbeda. Nama dan status toko dapat di-*drill down* dengan Lihat toko; tidak hilang dari histori. Pop-up rekap dan rencana bekerja pada **scope**, bukan satu toko yang dipakai sebagai pintu masuk.
+- Filtering dan pagination 50 berada pada **kelompok pengiriman di server**, agar tidak memecah satu kelompok ke halaman berbeda; label tab menampilkan jumlah kelompok bukan jumlah order. `DRAFT`/ `NO_ORDER` toko tetap di luar antrean.
+- Bila sebagian source sudah `PROSES_PRODUKSI` dan sebagian baru `KIRIM`, tampilkan **Pesanan Susulan** dengan hitungan masing-masing, blokir konsolidasi ulang pada scope yang sudah memiliki plan. Mekanisme penanganan pesanan susulan menjadi keputusan bisnis berikutnya.
+- Endpoint grouped `GET /api/v1/production/delivery-queue/` untuk UI; endpoint lama `/api/v1/production/orders/` tetap tersedia. Tanpa migrasi atau perubahan data, status, Odoo, atau semantik draft.
