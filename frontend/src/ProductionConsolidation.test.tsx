@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import ProductionConsolidation from "./ProductionConsolidation";
 import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
+  loadProductionDraft, saveProductionDraft,
   type ProductionInboxOrder, type ConsolidationPreview, type ConsolidationDetail,
 } from "./api";
 
@@ -10,6 +11,8 @@ vi.mock("./api", () => ({
   loadConsolidationPreview: vi.fn(),
   loadConsolidationDetail: vi.fn(),
   saveConsolidation: vi.fn(),
+  loadProductionDraft: vi.fn(),
+  saveProductionDraft: vi.fn(),
 }));
 
 const order: ProductionInboxOrder = {
@@ -92,6 +95,12 @@ beforeEach(() => {
         ? "400" : null,
     })),
   }));
+  vi.mocked(loadProductionDraft).mockResolvedValue({ draft: null });
+  vi.mocked(saveProductionDraft).mockResolvedValue({
+    draft: { id: 12, version: 1, production_date: null,
+      production_schedule_code: null, order_ids: [1, 2], items: [],
+      updated_at: "2026-11-08T10:00:00+07:00", updated_by: "admin_produksi" },
+  });
   vi.mocked(loadConsolidationDetail).mockResolvedValue(detail);
   vi.mocked(saveConsolidation).mockResolvedValue({
     plan_id: 7, order_ids: [1, 2], shortfall_sku_count: 1,
@@ -258,6 +267,7 @@ describe("Konsolidasi Produksi V1", () => {
       delivery_schedule_code: "SUBUH",
       production_date: "2026-11-06", production_schedule_code: "PAGI",
       order_ids: [1, 2],
+      draft_version: 0,
       items: [{ product_id: 5, qty_planned: "400" }],
     }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
