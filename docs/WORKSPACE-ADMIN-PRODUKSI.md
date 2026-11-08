@@ -180,3 +180,29 @@ Menu teknis Product Capacities hanya untuk inspeksi; gunakan Production Assignme
 - Kekurangan = `max(0, requested - planned)`. Kelebihan = `max(0, planned - requested)`, hanya ditampilkan tanpa alokasi otomatis. Pesanan dan jadwal kirim toko tetap utuh.
 - Informasi BoM yang belum tersedia diberi label **Belum tersedia**, tanpa menebak resep atau memblokir penyimpanan manual karena informasi tersebut. `qty_mo` dan `batch_qty` tetap NULL pada rencana baru; tidak ada perhitungan batch atau MO Odoo pada tahap ini.
 - Kelebihan belum otomatis dijadikan WIP atau dibagi prorata. Pengaturan alokasi aktual tetap di tahap Packing; kebijakan WIP/prorata belum diputuskan.
+
+
+## Draft Rencana Produksi — Simpan, Tutup, Lanjutkan (8 November 2026)
+
+**Skenario:** Admin Produksi sedang menyusun Qty untuk banyak SKU tetapi harus berhenti. Pada modal **Rencanakan** kini ada **Simpan Draft** dan **Simpan Konsolidasi** dengan konsekuensi berbeda.
+
+1. Di antrean `KIRIM`, klik **Rencanakan**. Pilih tanggal/jadwal produksi jika sudah diketahui, lalu isi beberapa Qty. Tidak perlu menuntaskan semuanya untuk menyimpan Draft.
+2. Klik **Simpan Draft**. Sistem menampilkan konfirmasi waktu dan akun penyimpan. Draft tersimpan di database, bukan hanya state browser; dapat dilanjutkan setelah menutup modal, refresh aplikasi, atau login kembali.
+3. Klik **Batal / Tutup** atau ×; daftar tidak berpindah halaman. Pada lingkup pengiriman yang mempunyai draft, tombol sekarang **Lanjutkan Draft** (status order tetap `KIRIM`).
+4. Klik **Lanjutkan Draft** untuk memuat tanggal, jadwal, Qty per SKU yang sebelumnya tersimpan. Qty yang belum diisi tetap kosong. Pencarian SKU tidak menghapus nilai yang tersembunyi.
+5. Jika seluruh Qty siap dan kapasitas telah dicek ulang, klik **Simpan Konsolidasi**. Semua sumber KIRIM dalam lingkup yang sama menjadi PROSES_PRODUKSI setelah transaksi sukses; draft dihapus otomatis. Jika finalisasi gagal, draft tetap ada.
+
+| Perilaku | Simpan Draft | Simpan Konsolidasi |
+|---|---|---|
+| Tanggal/jadwal produksi | Boleh belum diisi | Wajib |
+| Qty SKU | Boleh baru sebagian | Semua SKU wajib valid |
+| Order toko `KIRIM` | Tetap KIRIM | Berubah menjadi PROSES_PRODUKSI setelah transaksi |
+| Kapasitas | Tidak dipesan/dikurangi | Diuji ulang dan diperhitungkan |
+| Data yang tersimpan | `ProductionConsolidationDraft` | `ProductionPlan`, baris, sumber, audit |
+| MO/Odoo | Tidak dibuat | Belum dibuat pada tahap ini |
+
+**Perhatian:** tombol tutup **tidak otomatis menyimpan**; bila terdapat perubahan yang belum disimpan, muncul konfirmasi agar operator tidak tanpa sengaja kehilangan pekerjaan. Simpan Draft perlu diklik secara eksplisit. Draft dapat digunakan bersama oleh Admin Produksi untuk lingkup pengiriman yang sama, tetapi versi stale ditolak agar tidak terjadi overwrite antarpengguna. Jika pesanan KIRIM atau master kapasitas berubah selama draft tersimpan, data sumber dan batas kapasitas diperiksa ulang sebelum finalisasi.
+
+**API:** `GET /api/v1/production/consolidation/draft/?kitchen_code=JP&delivery_date=2026-11-07&delivery_schedule_code=SUBUH` dan `POST /api/v1/production/consolidation/draft/` menggunakan scope yang sama dengan `production_date` nullable, `production_schedule_code` kosong bila belum dipilih, `items` Qty subset SKU, `order_ids` dan `version` untuk pengamanan konflik. Endpoint hanya untuk role PRODUCTION/ADMIN.
+
+**Migration:** `0005_production_consolidation_draft`. Setelah membuat backup PostgreSQL dan deploy dari main, jalankan `docker compose exec api python manage.py migrate --noinput`, kemudian cek migrasi dan layar. Tidak menulis ke Odoo.

@@ -170,3 +170,13 @@ Di **Django Admin → Production Assignments**, Admin dapat mengisi **SKU, dapur
 Kapasitas harus angka bulat sesuai UoM master Odoo. Kolom kosong mempertahankan nilai lama (atau belum diatur untuk SKU baru); `0` adalah kapasitas nol. Kapasitas tidak diatur tetap memblokir konsolidasi pada jadwal itu. Edit/impor diaudit, dan pindah dapur untuk SKU berkapasitas memerlukan konfirmasi. Data tetap disimpan normal di `ProductCapacity(product, schedule)` karena satu SKU hanya ditugaskan ke satu dapur pada V1. Tanpa migrasi baru. Panduan: [Template SKU per Dapur](docs/TEMPLATE-PEMESANAN.md).
 
 Menu teknis **Product Capacities** masih dapat dipakai untuk inspeksi, tetapi **read-only**; input/perubahan kapasitas harus dilakukan melalui template SKU dapur agar audit dan validasi integer konsisten.
+
+
+## Simpan Draft rencana produksi (resumable)
+Pada `/produksi/` → **Rencanakan**, operator kini mempunyai **Simpan Draft** selain **Simpan Konsolidasi**. Draft boleh belum memiliki tanggal/jadwal produksi atau hanya sebagian Qty SKU yang diisi. Setelah tersimpan, tutup pop-up; pada pesanan KIRIM di lingkup dapur × tanggal kirim × jadwal kirim yang sama, tombol berubah menjadi **Lanjutkan Draft**. Buka lagi untuk melanjutkan isian, termasuk setelah logout/reload/pergantian sesi.
+
+**Penting:** Simpan Draft **tidak membuat ProductionPlan**, **tidak mengubah StoreOrder KIRIM**, **tidak menggunakan/mereservasi kapasitas**, serta tidak membuat MO/Odoo. Draft adalah data pekerjaan sementara, bukan status `ProductionPlan.DRAFT` atau `StoreOrder.DRAFT`. Form menampilkan tanggal operator terakhir dan memperingatkan jika perubahan belum disimpan sebelum menutup. Satu draft dibagikan per lingkup kirim; pembaruan dengan versi lama ditolak (409) agar dua operator tidak saling menimpa.
+
+**Simpan Konsolidasi** tetap membutuhkan seluruh tanggal/jadwal/Qty valid, memeriksa kapasitas **terbaru** dan pesanan sumber, lalu membuat rencana+audit+status secara atomik. Draft akan dihapus dalam transaksi final yang berhasil; kegagalan finalisasi mempertahankan draft untuk diperbaiki.
+
+Endpoint: `GET/POST /api/v1/production/consolidation/draft/` (PRODUCTION/ADMIN). **Migration `0005_production_consolidation_draft` diperlukan.** Setelah backup database dan deploy versi yang sudah di-merge, jalankan `docker compose exec api python manage.py migrate --noinput`. Lihat [Workspace Admin Produksi](docs/WORKSPACE-ADMIN-PRODUKSI.md).

@@ -284,6 +284,46 @@ class ProductionPlanSource(models.Model):
         ordering = ["order_id"]
 
 
+class ProductionConsolidationDraft(models.Model):
+    """Resumable planning inputs, not a ProductionPlan or capacity reservation.
+
+    One shared draft per delivery scope; KIRIM orders stay untouched until
+    the operator explicitly submits a complete consolidation.
+    """
+    kitchen = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="consolidation_drafts",
+    )
+    delivery_date = models.DateField()
+    delivery_schedule = models.ForeignKey(
+        Schedule, on_delete=models.PROTECT, related_name="consolidation_drafts",
+    )
+    production_date = models.DateField(null=True, blank=True)
+    production_schedule = models.ForeignKey(
+        Schedule, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="draft_production_slots",
+    )
+    source_order_ids = models.JSONField(default=list)
+    planned_items = models.JSONField(default=list)
+    version = models.PositiveIntegerField(default=1)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="production_drafts_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["kitchen", "delivery_date", "delivery_schedule"],
+                name="uq_ro_consolidation_draft_scope",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["updated_at"], name="ix_ro_draft_updated"),
+        ]
+
+
 class MaterialRequestLine(models.Model):
     plan = models.ForeignKey(
         ProductionPlan, related_name="material_lines", on_delete=models.CASCADE

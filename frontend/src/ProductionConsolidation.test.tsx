@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import ProductionConsolidation from "./ProductionConsolidation";
 import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
+  loadProductionDraft, saveProductionDraft,
   type ProductionInboxOrder, type ConsolidationPreview, type ConsolidationDetail,
 } from "./api";
 
@@ -10,6 +11,8 @@ vi.mock("./api", () => ({
   loadConsolidationPreview: vi.fn(),
   loadConsolidationDetail: vi.fn(),
   saveConsolidation: vi.fn(),
+  loadProductionDraft: vi.fn(),
+  saveProductionDraft: vi.fn(),
 }));
 
 const order: ProductionInboxOrder = {
@@ -92,6 +95,12 @@ beforeEach(() => {
         ? "400" : null,
     })),
   }));
+  vi.mocked(loadProductionDraft).mockResolvedValue({ draft: null });
+  vi.mocked(saveProductionDraft).mockResolvedValue({
+    draft: { id: 12, version: 1, production_date: null,
+      production_schedule_code: null, order_ids: [1, 2], items: [],
+      updated_at: "2026-11-08T10:00:00+07:00", updated_by: "admin_produksi" },
+  });
   vi.mocked(loadConsolidationDetail).mockResolvedValue(detail);
   vi.mocked(saveConsolidation).mockResolvedValue({
     plan_id: 7, order_ids: [1, 2], shortfall_sku_count: 1,
@@ -258,6 +267,7 @@ describe("Konsolidasi Produksi V1", () => {
       delivery_schedule_code: "SUBUH",
       production_date: "2026-11-06", production_schedule_code: "PAGI",
       order_ids: [1, 2],
+      draft_version: 0,
       items: [{ product_id: 5, qty_planned: "400" }],
     }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
@@ -300,5 +310,117 @@ describe("Konsolidasi Produksi V1", () => {
     expect(screen.queryByRole("button", { name: "Simpan Konsolidasi" })).toBeNull();
     expect(screen.getByText("Subuh")).toBeTruthy();
     expect(screen.getByText("Pagi")).toBeTruthy();
+  });
+});
+
+
+describe("Draft rencana produksi dapat dilanjutkan", () => {
+  it("saves incomplete draft without requiring dates, slots, Qty or finalization", async () => {
+    const onDraftSaved = vi.fn();
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={vi.fn()} onSaved={vi.fn()} onDraftSaved={onDraftSaved}
+    />);
+    const draftButton = screen.getByRole("button", { name: "Simpan Draft" });
+    await waitFor(() => expect((draftButton as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByRole("button", {
+      name: "Simpan Konsolidasi",
+    }) as HTMLButtonElement).disabled).toBe(true);
+    const qtyInput = screen.getByRole("textbox", { name: "Qty Produksi 10005" });
+    fireEvent.change(qtyInput, { target: { value: "250" } });
+    expect((qtyInput as HTMLInputElement).value).toBe("250");
+    fireEvent.click(draftButton);
+    await waitFor(() => expect(saveProductionDraft).toHaveBeenCalledWith({
+      kitchen_code: "JP",
+      delivery_date: "2026-11-07",
+      delivery_schedule_code: "SUBUH",
+      production_date: null,
+      production_schedule_code: "",
+      order_ids: [1, 2],
+      items: [{ product_id: 5, qty_planned: "250" }],
+      version: 0,
+    }));
+    await waitFor(() => expect(onDraftSaved).toHaveBeenCalledOnce());
+    expect(saveConsolidation).not.toHaveBeenCalled();
+    expect(screen.getByText(/Draft tersimpan. Anda dapat menutup pop-up/)).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Rencanakan Produksi" })).toBeTruthy();
+  });
+
+  it("restores saved date, production slot and partial Qty after reopening the popup", async () => {
+    vi.mocked(loadProductionDraft).mockResolvedValue({
+      draft: {
+        id: 33, version: 5,
+        production_date: "2026-11-06",
+        production_schedule_code: "PAGI",
+        order_ids: [1, 2],
+        items: [{ product_id: 5, qty_planned: "325" }],
+        updated_at: "2026-11-08T10:00:00+07:00",
+        updated_by: "admin_produksi",
+      },
+    });
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={vi.fn()} onSaved={vi.fn()} onDraftSaved={vi.fn()}
+    />);
+    await waitFor(() => expect(
+      (screen.getByLabelText("Tanggal Produksi (manual)") as HTMLInputElement).value
+    ).toBe("2026-11-06"));
+    await waitFor(() => expect(
+      (screen.getByLabelText("Jadwal Produksi") as HTMLSelectElement).value
+    ).toBe("PAGI"));
+    await waitFor(() => expect(
+      (screen.getByRole("textbox", { name: "Qty Produksi 10005" }) as HTMLInputElement).value
+    ).toBe("325"));
+    expect(screen.getByText(/Draft tersimpan/)).toBeTruthy();
+    expect(screen.getByText(/admin_produksi/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Konsolidasi" }));
+    await waitFor(() => expect(saveConsolidation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft_version: 5,
+        production_date: "2026-11-06",
+        production_schedule_code: "PAGI",
+        items: [{ product_id: 5, qty_planned: "325" }],
+      })
+    ));
+  });
+
+  it("prevents accidental discarding of unsaved changes", async () => {
+    const onBack = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={onBack} onSaved={vi.fn()}
+    />);
+    await screen.findByRole("textbox", { name: "Qty Produksi 10005" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
+      target: { value: "250" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Batal / Tutup" }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(onBack).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("keeps modal open on draft save conflicts, instead of losing inputs", async () => {
+    vi.mocked(saveProductionDraft).mockRejectedValueOnce(
+      new Error("Draft diperbarui operator lain.")
+    );
+    render(<ProductionConsolidation
+      order={order} planId={null} schedules={schedules}
+      onBack={vi.fn()} onSaved={vi.fn()}
+    />);
+    const saveDraftButton = screen.getByRole("button", { name: "Simpan Draft" });
+    await waitFor(() => expect((saveDraftButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByRole("textbox", { name: "Qty Produksi 10005" }), {
+      target: { value: "300" },
+    });
+    fireEvent.click(saveDraftButton);
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(
+      "Draft diperbarui operator lain"
+    ));
+    expect((screen.getByRole("textbox", {
+      name: "Qty Produksi 10005",
+    }) as HTMLInputElement).value).toBe("300");
+    expect(saveConsolidation).not.toHaveBeenCalled();
   });
 });

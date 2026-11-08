@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
+  loadProductionDraft, saveProductionDraft,
   type ConsolidationDetail, type ConsolidationPreview,
   type ConsolidationItem, type ProductionInboxOrder,
   type NamedOption,
@@ -13,6 +14,7 @@ type Props = {
   schedules: NamedOption[];
   onBack: () => void;
   onSaved: () => void;
+  onDraftSaved?: () => void;
 };
 
 function qty(value: string | null, uom: string): string {
@@ -31,9 +33,21 @@ function isValidPlan(item: ConsolidationItem, input: string): boolean {
   return n > 0n && n <= BigInt(item.capacity_available);
 }
 
+function draftSignature(
+  date: string, schedule: string, values: Record<number, string>,
+): string {
+  return JSON.stringify({
+    production_date: date,
+    production_schedule_code: schedule,
+    items: Object.entries(values)
+      .filter(([, value]) => value !== "")
+      .sort(([a], [b]) => Number(a) - Number(b)),
+  });
+}
+
 /** Native modal: keep the inbox mounted, keyboard focus inside, and scroll in the popup. */
 export default function ProductionConsolidation({
-  order, planId, schedules, onBack, onSaved,
+  order, planId, schedules, onBack, onSaved, onDraftSaved,
 }: Props) {
   const [productionDate, setProductionDate] = useState("");
   const [productionScheduleCode, setProductionScheduleCode] = useState("");
@@ -41,6 +55,14 @@ export default function ProductionConsolidation({
   const [detail, setDetail] = useState<ConsolidationDetail | null>(null);
   const [savedPlanId, setSavedPlanId] = useState<number | null>(planId);
   const [planned, setPlanned] = useState<Record<number, string>>({});
+  const [draftLoading, setDraftLoading] = useState(planId === null);
+  const [draftVersion, setDraftVersion] = useState(0);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [draftSavedBy, setDraftSavedBy] = useState<string | null>(null);
+  const [savedDraftSignature, setSavedDraftSignature] = useState(
+    draftSignature("", "", {}),
+  );
+  const [draftMessage, setDraftMessage] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -61,10 +83,54 @@ export default function ProductionConsolidation({
     };
   }, []);
 
+  const draftDirty = draftSignature(
+    productionDate, productionScheduleCode, planned,
+  ) !== savedDraftSignature;
+
   // A submitted plan must not be interrupted by closing the popup.
   const closeModal = () => {
-    if (!saving) onBack();
+    if (saving) return;
+    if (!savedPlanId && draftDirty && !window.confirm(
+      "Ada perubahan yang belum disimpan sebagai Draft. Tutup tanpa menyimpan?"
+    )) return;
+    onBack();
   };
+
+  useEffect(() => {
+    if (planId !== null) return;
+    const controller = new AbortController();
+    setDraftLoading(true);
+    loadProductionDraft({
+      kitchen_code: order.kitchen_code,
+      delivery_date: order.delivery_date,
+      delivery_schedule_code: order.schedule_code,
+    }, controller.signal).then(({ draft }) => {
+      if (controller.signal.aborted) return;
+      if (draft) {
+        const date = draft.production_date || "";
+        const slot = draft.production_schedule_code || "";
+        const items = Object.fromEntries(
+          draft.items.map((item) => [item.product_id, item.qty_planned]),
+        );
+        setProductionDate(date);
+        setProductionScheduleCode(slot);
+        setPlanned(items);
+        setSavedDraftSignature(draftSignature(date, slot, items));
+        setDraftVersion(draft.version);
+        setDraftSavedAt(draft.updated_at);
+        setDraftSavedBy(draft.updated_by);
+      }
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted) setError(
+        reason instanceof Error ? reason.message : "Draft gagal dimuat."
+      );
+    }).finally(() => {
+      if (!controller.signal.aborted) setDraftLoading(false);
+    });
+    return () => controller.abort();
+  }, [
+    order.kitchen_code, order.delivery_date, order.schedule_code, planId,
+  ]);
 
   useEffect(() => {
     if (!savedPlanId) {
@@ -87,7 +153,7 @@ export default function ProductionConsolidation({
   }, [savedPlanId]);
 
   useEffect(() => {
-    if (savedPlanId) return;
+    if (savedPlanId || draftLoading) return;
     const controller = new AbortController();
     setLoading(true);
     setError("");
@@ -117,7 +183,7 @@ export default function ProductionConsolidation({
     return () => controller.abort();
   }, [
     order.kitchen_code, order.delivery_date, order.schedule_code,
-    productionDate, productionScheduleCode, savedPlanId,
+    productionDate, productionScheduleCode, savedPlanId, draftLoading,
   ]);
 
   const hasInvalidRows = useMemo(
@@ -127,8 +193,46 @@ export default function ProductionConsolidation({
       )),
     [preview, planned],
   );
-  const canSave = !savedPlanId && !loading && !saving &&
+  const canSave = !savedPlanId && !draftLoading && !loading && !saving &&
     !!productionDate && !!productionScheduleCode && !hasInvalidRows;
+  const canSaveDraft = !savedPlanId && !draftLoading && !loading && !saving && !!preview;
+
+  const saveDraft = async () => {
+    if (!canSaveDraft || !preview) return;
+    setSaving(true);
+    setError("");
+    setDraftMessage("");
+    try {
+      const values = preview.items.map((item) => ({
+        product_id: item.product_id,
+        qty_planned: planned[item.product_id] ?? "",
+      }));
+      const { draft } = await saveProductionDraft({
+        kitchen_code: order.kitchen_code,
+        delivery_date: order.delivery_date,
+        delivery_schedule_code: order.schedule_code,
+        production_date: productionDate || null,
+        production_schedule_code: productionScheduleCode,
+        order_ids: preview.order_ids,
+        items: values,
+        version: draftVersion,
+      });
+      setDraftVersion(draft.version);
+      setDraftSavedAt(draft.updated_at);
+      setDraftSavedBy(draft.updated_by);
+      setSavedDraftSignature(draftSignature(
+        productionDate, productionScheduleCode, planned,
+      ));
+      setDraftMessage("Draft tersimpan. Anda dapat menutup pop-up dan melanjutkan nanti.");
+      onDraftSaved?.();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Gagal menyimpan draft."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const submit = async () => {
     if (!canSave || !preview) return;
@@ -142,6 +246,7 @@ export default function ProductionConsolidation({
         production_date: productionDate,
         production_schedule_code: productionScheduleCode,
         order_ids: preview.order_ids,
+        draft_version: draftVersion,
         items: preview.items.map((item) => ({
           product_id: item.product_id,
           qty_planned: planned[item.product_id],
@@ -189,7 +294,7 @@ export default function ProductionConsolidation({
       <div className="production-plan-modal-content">
         <header className="production-recap-header production-plan-modal-header">
           <div>
-            <div className="eyebrow">ADMIN PRODUKSI · {viewing ? "RIWAYAT RENCANA" : "KONSOLIDASI BARU"}</div>
+            <div className="eyebrow">ADMIN PRODUKSI · {viewing ? "RIWAYAT RENCANA" : (draftVersion ? "LANJUTKAN DRAFT" : "KONSOLIDASI BARU")}</div>
             <h2 id="production-plan-title">{viewing ? `Rencana Produksi #${savedPlanId}` : "Rencanakan Produksi"}</h2>
             <p id="production-plan-description">
               {order.kitchen_name} · Tanggal kirim {order.delivery_date} · Jadwal kirim {order.schedule_name}
@@ -218,14 +323,14 @@ export default function ProductionConsolidation({
             <label htmlFor="production-date">Tanggal Produksi (manual)</label>
             {viewing ? <strong>{detail?.production_date || "—"}</strong> : (
               <input id="production-date" type="date" value={productionDate}
-                onChange={(event) => setProductionDate(event.target.value)} required />
+                onChange={(event) => setProductionDate(event.target.value)} disabled={draftLoading} required />
             )}
           </div>
           <div>
             <label htmlFor="production-schedule">Jadwal Produksi</label>
             {viewing ? <strong>{detail?.production_schedule?.name || "—"}</strong> : (
               <select id="production-schedule" value={productionScheduleCode}
-                onChange={(event) => setProductionScheduleCode(event.target.value)} required>
+                onChange={(event) => setProductionScheduleCode(event.target.value)} disabled={draftLoading} required>
                 <option value="">Pilih jadwal produksi</option>
                 {activeSchedules.map((schedule) => (
                   <option value={schedule.code} key={schedule.code}>
@@ -246,6 +351,19 @@ export default function ProductionConsolidation({
         </p>
       </section>
 
+      {!viewing && draftLoading && <div role="status" className="table-placeholder">
+        <span className="spinner" /> Memuat draft tersimpan…
+      </div>}
+      {!viewing && !draftLoading && (
+        <p role="status" className="production-draft-status">
+          {draftDirty
+            ? "Perubahan belum disimpan sebagai Draft."
+            : draftSavedAt
+              ? `Draft tersimpan ${new Date(draftSavedAt).toLocaleString("id-ID")}${draftSavedBy ? ` oleh ${draftSavedBy}` : ""}.`
+              : "Belum ada draft tersimpan."}
+        </p>
+      )}
+      {draftMessage && <div role="status" className="message success">{draftMessage}</div>}
       {error && <div role="alert" className="message error">{error}</div>}
       {loading && <div role="status" className="table-placeholder"><span className="spinner" /> Menghitung rencana dan kapasitas…</div>}
       {!loading && rows.length > 0 && (
@@ -322,8 +440,8 @@ export default function ProductionConsolidation({
                               }
                             }}
                             aria-invalid={invalid}
+                            disabled={draftLoading}
                             placeholder="Isi Qty"
-                            disabled={!productionDate || !productionScheduleCode}
                           />
                           <small>{item.uom}</small>
                         </>
@@ -364,15 +482,22 @@ export default function ProductionConsolidation({
           </div>
         </div>
         <footer className="production-recap-footer production-plan-modal-footer">
-          <span>Tekan Esc untuk menutup dan kembali ke daftar pesanan.</span>
+          <span>{viewing ? "Tekan Esc untuk kembali ke daftar." : "Simpan Draft untuk melanjutkan nanti. Batal/Tutup tidak menyimpan perubahan."}</span>
           <div className="action-buttons">
             <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeModal}>
               {viewing ? "Tutup Rencana" : "Batal / Tutup"}
             </button>
             {!viewing && (
-              <button type="button" className="btn btn-primary" disabled={!canSave} onClick={submit}>
-                {saving ? "Menyimpan…" : "Simpan Konsolidasi"}
-              </button>
+              <>
+                <button type="button" className="btn btn-secondary" disabled={!canSaveDraft}
+                  onClick={saveDraft}>
+                  {saving ? "Menyimpan…" : "Simpan Draft"}
+                </button>
+                <button type="button" className="btn btn-primary" disabled={!canSave}
+                  onClick={submit}>
+                  {saving ? "Menyimpan…" : "Simpan Konsolidasi"}
+                </button>
+              </>
             )}
           </div>
         </footer>

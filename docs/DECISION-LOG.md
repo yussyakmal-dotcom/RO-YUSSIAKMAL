@@ -272,3 +272,11 @@ Lihat [README](../README.md) dan [initial migration](../backend/ro_core/migratio
 - **D-070 (✅ pengguna):** Admin Produksi boleh mengisi Qty Produksi 200 atau 300 untuk kebutuhan 150, selama masih dalam kapasitas. Ini menggantikan batas sementara D-065 bahwa Qty Planned tidak boleh melebihi Qty Requested. Qty tetap manual.
 - **I-062 (implementasi):** Preview dan modal menampilkan hasil per resep dari master Odoo. Simpan mempertahankan persis Qty input, tanpa perhitungan batch; Qty MO/batch tetap NULL. Kekurangan/kelebihan dibandingkan dengan Qty manual.
 - **O-028 (❓ terbuka):** Pilihan kelebihan menjadi WIP atau dibagi prorata oleh Admin Packing belum ditetapkan. Tidak ada alokasi, stok, MO/transfer Odoo atau perubahan pesanan toko otomatis.
+
+
+## Simpan Draft di tengah pekerjaan konsolidasi — 2026-11-08
+- **D-069 (✅ permintaan eksplisit pengguna):** Modal **Rencanakan Produksi** perlu **Simpan Draft** agar operator dapat berhenti di tengah pengisian dan melanjutkan draft kemudian. Tombol **Tutup/Batal** saja tidak memadai.
+- **D-070 (✅ implementasi semantik aman):** Draft terpisah dari `ProductionPlan` final dan `StoreOrder.DRAFT`; draft **tidak mengubah KIRIM**, tidak memakai kapasitas, tidak membuat MO/Odoo dan boleh memiliki tanggal/jadwal/Qty parsial. Finalisasi tetap meninjau kapasitas dan pesanan KIRIM terbaru.
+- **I-062 (✅ backend + migration 0005):** `ProductionConsolidationDraft` menyimpan satu draft bersama untuk setiap dapur × tanggal kirim × jadwal kirim, tanggal/jadwal produksi nullable, `planned_items`, snapshot ID sumber, versi dan pengubah terakhir. API GET/POST draft role PRODUCTION/ADMIN dengan optimistic lock. Audit SAVE_DRAFT. Finalisasi menghapus draft secara atomik setelah status dan rencana disimpan.
+- **I-063 (✅ frontend):** Modal Rencanakan menyediakan Simpan Draft dan Simpan Konsolidasi; draft yang disimpan dapat dibuka lewat **Lanjutkan Draft** pada order KIRIM. Perubahan belum tersimpan memunculkan konfirmasi saat menutup pop-up; filter/pagination tidak berubah.
+- **O-028 (❓ backlog):** Aturan pembersihan draft yang sangat lama, opsi buang draft/reset ke awal, dan historisasi revisi draft mendetail belum ditetapkan; versi saat ini tetap menyimpan audit setiap save.

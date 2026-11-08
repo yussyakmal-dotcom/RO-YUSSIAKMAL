@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    AuditLog, ProductCapacity, ProductionPlan, ProductionPlanLine,
+    AuditLog, ProductCapacity, ProductionConsolidationDraft, ProductionPlan, ProductionPlanLine,
     ProductionPlanSource, Schedule, StoreOrder, StoreOrderLine, Warehouse,
 )
 from .production_demand_api import _production_access, _product_uom
@@ -38,6 +38,7 @@ class PlannedItem(serializers.Serializer):
 
 
 class SaveConsolidation(ScopeQuery):
+    draft_version = serializers.IntegerField(min_value=0, required=False, default=0)
     production_date = serializers.DateField(required=True)
     production_schedule_code = serializers.CharField(max_length=40, required=True)
     order_ids = serializers.ListField(
@@ -274,6 +275,8 @@ def save_consolidation(request):
 
     try:
         with transaction.atomic():
+            # Shared scope lock ensures save-draft and finalize never race.
+            Warehouse.objects.select_for_update().get(pk=kitchen.pk)
             orders = _orders(kitchen, delivery_date, delivery_schedule, lock=True)
             eligible, rows, snapshots = _demand(orders)
             # Prevent stale previews, phantom new KIRIM orders and replays.
@@ -284,6 +287,16 @@ def save_consolidation(request):
             if _existing_plan(kitchen, delivery_date, delivery_schedule):
                 raise ConsolidationConflict(
                     "Lingkup tanggal/jadwal kirim sudah dikonsolidasi."
+                )
+            shared_draft = ProductionConsolidationDraft.objects.select_for_update().filter(
+                kitchen=kitchen, delivery_date=delivery_date,
+                delivery_schedule=delivery_schedule,
+            ).first()
+            actual_draft_version = shared_draft.version if shared_draft else 0
+            if params["draft_version"] != actual_draft_version:
+                raise ConsolidationConflict(
+                    "Draft diubah operator lain. Buka ulang draft terbaru "
+                    "sebelum konsolidasi final; tidak ada data yang diubah."
                 )
             if sorted(input_products) != sorted(r["product_id"] for r in rows):
                 raise ConsolidationConflict(
@@ -349,6 +362,8 @@ def save_consolidation(request):
                 pk__in=[o.pk for o in eligible],
                 status=StoreOrder.Status.KIRIM,
             ).update(status=StoreOrder.Status.PROSES_PRODUKSI)
+            if shared_draft:
+                shared_draft.delete()
             AuditLog.objects.create(
                 actor=request.user, entity="ProductionPlan",
                 entity_id=str(plan.pk), action="CONSOLIDATE",

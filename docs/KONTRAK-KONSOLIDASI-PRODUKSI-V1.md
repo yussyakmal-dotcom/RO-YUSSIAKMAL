@@ -176,3 +176,18 @@ Persyaratan implementasi saat simpan:
 - Kekurangan = `max(0, requested - planned)`. Kelebihan = `max(0, planned - requested)`, hanya ditampilkan tanpa alokasi otomatis. Pesanan dan jadwal kirim toko tetap utuh.
 - Informasi BoM yang belum tersedia diberi label **Belum tersedia**, tanpa menebak resep atau memblokir penyimpanan manual karena informasi tersebut. `qty_mo` dan `batch_qty` tetap NULL pada rencana baru; tidak ada perhitungan batch atau MO Odoo pada tahap ini.
 - Kelebihan belum otomatis dijadikan WIP atau dibagi prorata. Pengaturan alokasi aktual tetap di tahap Packing; kebijakan WIP/prorata belum diputuskan.
+
+
+## 13. Draft pekerjaan yang dapat dilanjutkan (8 November 2026)
+
+**DISEPAKATI:** Selain **Simpan Konsolidasi**, Admin Produksi wajib mempunyai **Simpan Draft** selama mengerjakan perencanaan banyak SKU. Draft disimpan di middleware dan dapat dilanjutkan setelah modal ditutup; jangan menganggap **Batal/Tutup** sebagai save otomatis.
+
+**Kontrak:**
+1. Satu draft bersama per **dapur × tanggal kirim × jadwal kirim**. Operator boleh belum memilih **tanggal produksi** dan/atau **jadwal produksi**, atau baru mengisi sebagian Qty SKU.
+2. Draft Qty yang diisi harus angka bulat (digit integer); nilai kosong berarti belum diputuskan, bukan nol atau realisasi. Untuk Draft, Qty boleh sementara melampaui kapasitas karena belum menjadi keputusan final; perlu koreksi sebelum final.
+3. Simpan Draft tidak membuat `ProductionPlan`/`ProductionPlanLine`/`ProductionPlanSource`, tidak mengubah `StoreOrder.KIRIM`, tidak mereservasi kapasitas, tidak mengurangi stok, dan tidak menulis Odoo.
+4. Modal menunjukkan waktu dan akun penyimpan, dan dapat dibuka lagi dengan aksi **Lanjutkan Draft**. Draft yang dibuka versi lama tidak boleh menimpa versi lebih baru; konflik 409, tidak ada overwrite diam-diam.
+5. Simpan Konsolidasi memeriksa ulang semua sumber, tanggal/jadwal produksi wajib, Qty lengkap, dan kapasitas saat itu. Draft dihapus hanya di transaksi final sukses. Bila validasi gagal atau pembaruan status gagal, draft tetap utuh.
+6. Hapus draft hanya setelah finalisasi (V1). Kebijakan buang/reset draft lama merupakan keputusan terpisah. Audit CREATE/UPDATE draft ditulis ke AuditLog action SAVE_DRAFT.
+
+**Implementasi:** model `ProductionConsolidationDraft` dan migration 0005; endpoint `GET/POST /api/v1/production/consolidation/draft/`; frontend modal Rencanakan/Lanjutkan Draft, Simpan Draft, dan Simpan Konsolidasi. **Status ProductionPlan.DRAFT sebelumnya tetap berarti rencana lokal yang sudah dikonsolidasi**, bukan draft isian parsial.

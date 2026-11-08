@@ -231,6 +231,7 @@ export interface ProductionInboxOrder {
   order_id: number;
   status: ProductionQueueStatus;
   plan_id: number | null;
+  has_consolidation_draft?: boolean;
   store_code: string;
   store_name: string;
   kitchen_code: string;
@@ -336,6 +337,7 @@ export function saveConsolidation(
     production_schedule_code: string;
     order_ids: number[];
     items: { product_id: number; qty_planned: string }[];
+    draft_version?: number;
   },
 ): Promise<{ plan_id: number; order_ids: number[]; shortfall_sku_count: number; detail: string }> {
   return apiRequest("/api/v1/production/consolidations/", {
@@ -349,4 +351,44 @@ export function loadConsolidationDetail(
   return apiRequest<ConsolidationDetail>(
     "/api/v1/production/consolidations/" + planId + "/", { signal },
   );
+}
+
+export interface ProductionConsolidationDraft {
+  id: number;
+  version: number;
+  production_date: string | null;
+  production_schedule_code: string | null;
+  order_ids: number[];
+  items: { product_id: number; qty_planned: string }[];
+  updated_at: string;
+  updated_by: string | null;
+}
+export interface ProductionDraftScope {
+  kitchen_code: string;
+  delivery_date: string;
+  delivery_schedule_code: string;
+}
+
+export function loadProductionDraft(
+  scope: ProductionDraftScope, signal?: AbortSignal,
+): Promise<{ draft: ProductionConsolidationDraft | null }> {
+  return apiRequest(
+    "/api/v1/production/consolidation/draft/?" +
+      new URLSearchParams({ ...scope }).toString(),
+    { signal },
+  );
+}
+
+export function saveProductionDraft(
+  input: ProductionDraftScope & {
+    production_date: string | null;
+    production_schedule_code: string;
+    order_ids: number[];
+    items: { product_id: number; qty_planned: string }[];
+    version: number;
+  },
+): Promise<{ draft: ProductionConsolidationDraft }> {
+  return apiRequest("/api/v1/production/consolidation/draft/", {
+    method: "POST", body: JSON.stringify(input),
+  });
 }
