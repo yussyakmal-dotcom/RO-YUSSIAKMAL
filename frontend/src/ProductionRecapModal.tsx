@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { formatProductionQty, productionQtyLabel } from "./productionQty";
 import {
-  type ProductionDemand, type ProductionInboxOrder,
+  type ProductionDemand, type ProductionScope,
 } from "./api";
 
 type ProductionRecapModalProps = {
