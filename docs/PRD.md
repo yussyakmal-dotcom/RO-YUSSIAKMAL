@@ -229,3 +229,13 @@ SOP mengatur waktu dan eksekusi; middleware **bukan scheduler aktivitas fisik da
 - Kekurangan = `max(0, requested - planned)`. Kelebihan = `max(0, planned - requested)`, hanya ditampilkan tanpa alokasi otomatis. Pesanan dan jadwal kirim toko tetap utuh.
 - Informasi BoM yang belum tersedia diberi label **Belum tersedia**, tanpa menebak resep atau memblokir penyimpanan manual karena informasi tersebut. `qty_mo` dan `batch_qty` tetap NULL pada rencana baru; tidak ada perhitungan batch atau MO Odoo pada tahap ini.
 - Kelebihan belum otomatis dijadikan WIP atau dibagi prorata. Pengaturan alokasi aktual tetap di tahap Packing; kebijakan WIP/prorata belum diputuskan.
+
+
+## Pekerjaan konsolidasi dapat disimpan sebagai Draft (8 November 2026)
+- **DISEPAKATI:** Rencana Produksi harus memiliki **Simpan Draft** agar Admin Produksi dapat menghentikan pengisian Qty di tengah jalan, menutup modal, lalu melanjutkannya lagi saat dibutuhkan. **Batal/Tutup tidak sama dengan Simpan Draft**.
+- **Draft Rencana Produksi** berbeda dari status DRAFT pesanan toko dan dari `ProductionPlan.Status.DRAFT` yang merupakan rencana final lokal. Simpan Draft tidak membuat ProductionPlan/Line/Source, tidak mengubah KIRIM, tidak mencatat penggunaan kapasitas, dan tidak menghubungi Odoo.
+- Draft disimpan per **dapur × tanggal kirim × jadwal kirim**, satu draft bersama untuk lingkup tersebut. `production_date` (manual) dan `production_schedule` boleh kosong, begitu pula Qty SKU parsial. Nilai Qty yang diisi wajib digit integer; tidak ada `.0000` atau pembulatan.
+- Setelah draft tersimpan, antrean order KIRIM menunjukkan aksi **Lanjutkan Draft** yang memuat kembali Qty dan slot produksi. Panel tetap native modal pop-up di atas antrean, dengan posisi/filter/pagination daftar dipertahankan.
+- Draft memakai nomor versi/optimistic locking sehingga dua Admin tidak menimpa edit lain secara diam-diam. Status penyimpan dan waktu simpan terlihat. Modal meminta konfirmasi jika ditutup dengan perubahan yang belum tersimpan.
+- **Simpan Konsolidasi** adalah tindakan terpisah. Server memeriksa kembali source orders berstatus KIRIM, slot, Qty SKU dan kapasitas terkini; baru setelah seluruh transaksi berhasil rencana dibuat, status berubah PROSES_PRODUKSI, dan draft dihapus atomik. Gagal finalisasi tetap mempertahankan draft.
+- Database model baru `ProductionConsolidationDraft` melalui migration 0005; API GET/POST `/api/v1/production/consolidation/draft/`. Pembaruan repository menyertakan tes role, belum lengkap, resume, kehilangan draft, konflik antaroperator, dan finalisasi.
