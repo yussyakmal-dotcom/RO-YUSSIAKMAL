@@ -3,7 +3,7 @@ import {
   loadConsolidationPreview, loadConsolidationDetail, saveConsolidation,
   loadProductionDraft, saveProductionDraft,
   type ConsolidationDetail, type ConsolidationPreview,
-  type ConsolidationItem, type ProductionInboxOrder,
+  type ConsolidationItem, type ProductionScope,
   type NamedOption,
 } from "./api";
 import { formatProductionQty } from "./productionQty";
