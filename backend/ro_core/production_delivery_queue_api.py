@@ -28,14 +28,14 @@ class QueueQuery(serializers.Serializer):
     page = serializers.IntegerField(min_value=1, max_value=100000, default=1, required=False)
 
 
-def _scope_query(rows):
+def _scope_query(rows, *, schedule_field="schedule_id"):
     query = Q(pk__in=[])  # A zero-row result must never match all orders.
     for row in rows:
-        query |= Q(
-            kitchen_id=row["kitchen_id"],
-            delivery_date=row["delivery_date"],
-            schedule_id=row["schedule_id"],
-        )
+        query |= Q(**{
+            "kitchen_id": row["kitchen_id"],
+            "delivery_date": row["delivery_date"],
+            schedule_field: row["schedule_id"],
+        })
     return query
 
 
@@ -115,11 +115,12 @@ def production_delivery_queue(request):
         )
         entry["qty"] += int(value)
 
+    plan_matcher = _scope_query(selected, schedule_field="delivery_schedule_id")
     plan_by_scope = {}
-    for plan in ProductionPlan.objects.filter(matcher).order_by("pk"):
+    for plan in ProductionPlan.objects.filter(plan_matcher).order_by("pk"):
         key = (plan.delivery_date, plan.kitchen_id, plan.delivery_schedule_id)
         plan_by_scope[key] = plan.pk
-    draft_scopes = set(ProductionConsolidationDraft.objects.filter(matcher).values_list(
+    draft_scopes = set(ProductionConsolidationDraft.objects.filter(plan_matcher).values_list(
         "delivery_date", "kitchen_id", "delivery_schedule_id",
     ))
 
